@@ -35,6 +35,7 @@ Platform Ports
    s32g274a
    npcm845x
    nxp/index
+   hi3798mv200h
    poplar
    qemu
    qemu-sbsa
