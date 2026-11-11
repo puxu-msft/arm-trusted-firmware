@@ -128,4 +128,16 @@
 #define CRG94_WDG0_CKEN			(U(1) << 0)
 #define CRG94_WDG0_SRST			(U(1) << 4)
 
+/*
+ * HISI_BOOT_WDG 的启动保活装载值：24 MHz 下 170 s，即 hi3798mv200h 上 stage1 启动看门狗时用的值（计数器最多能装 178 s）。中断未清除时 SP805 在第二次到期才发出复位，所以窗口约 340 s。
+ */
+#define HISI_WDG0_BOOT_LOAD		U(0xF32FDC00)
+
+/*
+ * 厂商 CPU_ON 在释放从核前后写入 REG_CPU_LP 的值（HISI_CPU_ON_LP_BRACKET）：先写 0x206，再写 0x606，释放，然后写清掉 bit 10 的保存值，最后写回保存值。
+ */
+#define CPU_LP_RELEASE_A		U(0x206)
+#define CPU_LP_RELEASE_B		U(0x606)
+#define CPU_LP_RESTORE_CLR		(U(1) << 10)
+
 #endif /* HI3798MV200H_H */

@@ -29,9 +29,16 @@
  * and its .data/.bss/.stacks live in these pages for the whole kernel run.
  */
 
+/*
+ * 兄弟平台的加载器若把 BL31 固定在别处（hi3798mv300：厂商 fastboot 的 FIP 路径把 BL31 复制到 0x04400000），就在编译器命令行上传入这两个基址；下面的默认值是本板的。
+ */
+#ifndef MV200H_BL31_BASE
 #define MV200H_BL31_BASE		U(0x02001000)
+#endif
 #define MV200H_BL31_SIZE		U(0x00014000)	/* poplar's slot */
+#ifndef MV200H_DTB_BASE
 #define MV200H_DTB_BASE			U(0x02016000)	/* past BL31_LIMIT */
+#endif
 #define MV200H_DTB_MAX_SIZE		U(0x00010000)	/* >= dtb */
 
 #endif /* MV200H_LAYOUT_H */

@@ -12,6 +12,12 @@
 #   make PLAT=hi3798mv200h RESET_TO_BL31=1 CROSS_COMPILE=aarch64-linux-gnu- bl31
 #
 
+# 共用本移植的兄弟芯片的可选行为（见 plat/hisilicon/hi3798mv300/platform.mk）：加载器不启动看门狗时把 SP805 启动为启动保活网，以及在 CPU_ON 释放从核前后加上厂商的 REG_CPU_LP 写入。本板两者都关闭，因为它的 stage1 会启动看门狗。
+HISI_BOOT_WDG			?= 0
+HISI_CPU_ON_LP_BRACKET		?= 0
+$(eval $(call assert_booleans, HISI_BOOT_WDG HISI_CPU_ON_LP_BRACKET))
+$(eval $(call add_defines, HISI_BOOT_WDG HISI_CPU_ON_LP_BRACKET))
+
 COLD_BOOT_SINGLE_CPU		:= 1
 PROGRAMMABLE_RESET_ADDRESS	:= 1
 

@@ -80,6 +80,16 @@ static int hisi_pwr_domain_on(u_register_t mpidr)
 	regval |= (U(1) << (cpu + 8));
 	mmio_write_32((uintptr_t)(REG_BASE_CRG + REG_CPU_RST), regval);
 
+#if HISI_CPU_ON_LP_BRACKET
+	/*
+	 * 厂商 hi3798mv300 BL31 释放从核时（它的 pwr_domain_on）在下面两次清复位的前后写 REG_CPU_LP；R112 发现 hi3798mv200h 上不需要这对写入。这段只为在另一颗芯片上回答同一问题的那轮板测而编入。
+	 */
+	unsigned int lp = mmio_read_32((uintptr_t)(REG_BASE_CRG + REG_CPU_LP));
+
+	mmio_write_32((uintptr_t)(REG_BASE_CRG + REG_CPU_LP), CPU_LP_RELEASE_A);
+	mmio_write_32((uintptr_t)(REG_BASE_CRG + REG_CPU_LP), CPU_LP_RELEASE_B);
+#endif
+
 	/* Clear the slave cpu arm_por_srst_req reset */
 	regval = mmio_read_32((uintptr_t)(REG_BASE_CRG + REG_CPU_RST));
 	regval &= ~(U(1) << (cpu + 12));
@@ -89,6 +99,12 @@ static int hisi_pwr_domain_on(u_register_t mpidr)
 	regval = mmio_read_32((uintptr_t)(REG_BASE_CRG + REG_CPU_RST));
 	regval &= ~(U(1) << (cpu + 8));
 	mmio_write_32((uintptr_t)(REG_BASE_CRG + REG_CPU_RST), regval);
+
+#if HISI_CPU_ON_LP_BRACKET
+	mmio_write_32((uintptr_t)(REG_BASE_CRG + REG_CPU_LP),
+		      lp & ~CPU_LP_RESTORE_CLR);
+	mmio_write_32((uintptr_t)(REG_BASE_CRG + REG_CPU_LP), lp);
+#endif
 
 	/*
 	 * The board-proven release puts a counted pause between the reset

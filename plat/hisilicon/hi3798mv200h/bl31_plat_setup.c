@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -32,6 +33,44 @@
 
 static entry_point_info_t bl33_image_ep_info;
 static console_t console;
+
+#if HISI_BOOT_WDG
+#include <drivers/arm/sp805.h>
+
+/*
+ * 给自己不启动看门狗的加载器准备的启动保活网（hi3798mv300 上厂商 fastboot 的 FIP 路径直接热复位进本镜像）。冷启动路径上第一件事就启动它，这样从这里到内核 sp805_wdt probe 之间任何一处卡死（BL31、BL33、内核早期启动）都会让板子复位；之后由内核驱动接管该模块，BL31 除 SYSTEM_RESET 外不再碰它。序列与 hi3798mv200h 上的 stage1 相同：打开门控并解除复位、解锁、写 LOAD、再写 CONTROL，不重新上锁（在这个系列上，写完 LOAD 再写锁会冻结计数器）。CRG 写入后的稳定空转照搬厂商 fastboot（它在解锁该模块前于 VA 0xc08800 空转 1000 次）；回读不符就重试启动，因为后面没有任何环节会发现看门狗没启动。
+ */
+#define HISI_BOOT_WDG_TRIES	3U
+
+static bool hisi_boot_wdg_arm(void)
+{
+	unsigned int try, i;
+
+	for (try = 0U; try < HISI_BOOT_WDG_TRIES; try++) {
+		mmio_clrsetbits_32(REG_BASE_CRG + REG_PERI_CRG94,
+				   CRG94_WDG0_SRST, CRG94_WDG0_CKEN);
+		(void)mmio_read_32(REG_BASE_CRG + REG_PERI_CRG94);
+		dsb();
+		for (i = 0U; i < 1000U; i++) {
+			__asm__ volatile("nop");
+		}
+		mmio_write_32(HISI_WDG0_BASE + SP805_WDOG_LOCK_OFF,
+			      WDOG_UNLOCK_KEY);
+		mmio_write_32(HISI_WDG0_BASE + SP805_WDOG_LOAD_OFF,
+			      HISI_WDG0_BOOT_LOAD);
+		mmio_write_32(HISI_WDG0_BASE + SP805_WDOG_CTR_OFF,
+			      SP805_CTR_INTEN | SP805_CTR_RESEN);
+		if ((mmio_read_32(HISI_WDG0_BASE + SP805_WDOG_LOAD_OFF) ==
+		     HISI_WDG0_BOOT_LOAD) &&
+		    ((mmio_read_32(HISI_WDG0_BASE + SP805_WDOG_CTR_OFF) &
+		      (SP805_CTR_INTEN | SP805_CTR_RESEN)) ==
+		     (SP805_CTR_INTEN | SP805_CTR_RESEN))) {
+			return true;
+		}
+	}
+	return false;
+}
+#endif
 
 entry_point_info_t *bl31_plat_get_next_image_ep_info(uint32_t type)
 {
@@ -64,6 +103,10 @@ void bl31_early_platform_setup2(u_register_t arg0, u_register_t arg1,
 {
 	unsigned int val;
 
+#if HISI_BOOT_WDG
+	bool wdg_armed = hisi_boot_wdg_arm();
+#endif
+
 	/*
 	 * Inference, not measurement: the warm reset is believed to clear the
 	 * uart0 clock gate and drop uart_sel to the 3 MHz MCU clock (no round
@@ -82,6 +125,15 @@ void bl31_early_platform_setup2(u_register_t arg0, u_register_t arg1,
 
 	/* Init console for crash report */
 	plat_crash_console_init();
+
+#if HISI_BOOT_WDG
+	if (wdg_armed) {
+		NOTICE("BL31: boot watchdog armed, %lus per expiry\n",
+		       HISI_WDG0_BOOT_LOAD / SYS_COUNTER_FREQ_IN_TICKS);
+	} else {
+		ERROR("BL31: boot watchdog did not read back armed\n");
+	}
+#endif
 
 	/*
 	 * On the warm-reset entry this part has EL2 disabled until HCE lands
