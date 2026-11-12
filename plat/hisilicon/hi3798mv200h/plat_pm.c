@@ -40,12 +40,6 @@ static uintptr_t hisi_warm_entrypoint;
  * warm path too.
  */
 
-static void hisi_cpu_standby(plat_local_state_t cpu_state)
-{
-	dsb();
-	wfi();
-}
-
 static int hisi_pwr_domain_on(u_register_t mpidr)
 {
 	unsigned int cpu = plat_core_pos_by_mpidr(mpidr);
@@ -111,11 +105,6 @@ static void hisi_pwr_domain_off(const psci_power_state_t *target_state)
 	assert(0);
 }
 
-static void hisi_pwr_domain_suspend(const psci_power_state_t *target_state)
-{
-	assert(0);
-}
-
 static void hisi_pwr_domain_on_finish(const psci_power_state_t *target_state)
 {
 	assert(target_state->pwr_domain_state[MPIDR_AFFLVL0] ==
@@ -134,12 +123,6 @@ static void hisi_pwr_domain_on_finish(const psci_power_state_t *target_state)
 	 * enables the interface and the per-CPU lines from the non-secure view
 	 * that is the one actually wired.
 	*/
-}
-
-static void hisi_pwr_domain_suspend_finish(
-		const psci_power_state_t *target_state)
-{
-	assert(0);
 }
 
 static void __dead2 hisi_system_off(void)
@@ -169,7 +152,8 @@ static void __dead2 hisi_system_reset(void)
 	 * clock first, then load and arm -- the same two-part fix the kernel
 	 * side needed (its wdt_restart alone was not enough).
 	 */
-	mmio_setbits_32(REG_BASE_CRG + REG_PERI_CRG94, CRG94_WDG0_CKEN);
+	mmio_clrsetbits_32(REG_BASE_CRG + REG_PERI_CRG94, CRG94_WDG0_SRST,
+			   CRG94_WDG0_CKEN);
 	/*
 	 * Not sp805_start(): it writes LOAD and CONTROL and only then re-locks
 	 * the block, and on this part a lock write after LOAD freezes the
@@ -224,26 +208,17 @@ static int hisi_validate_ns_entrypoint(uintptr_t entrypoint)
 	return PSCI_E_INVALID_ADDRESS;
 }
 
-static void hisi_get_sys_suspend_power_state(psci_power_state_t *req_state)
-{
-	int i;
-
-	for (i = MPIDR_AFFLVL0; i <= PLAT_MAX_PWR_LVL; i++)
-		req_state->pwr_domain_state[i] = PLAT_MAX_OFF_STATE;
-}
-
+/*
+ * CPU_SUSPEND 与 SYSTEM_SUSPEND 都没有实现，所以它们的钩子保持 NULL：psci_setup() 按钩子是否存在来声明各项能力，而内核的 suspend-to-RAM 路径调用的正是被声明的 SYSTEM_SUSPEND。
+ */
 static const plat_psci_ops_t hisi_plat_psci_ops = {
-	.cpu_standby			= hisi_cpu_standby,
 	.pwr_domain_on			= hisi_pwr_domain_on,
 	.pwr_domain_off			= hisi_pwr_domain_off,
-	.pwr_domain_suspend		= hisi_pwr_domain_suspend,
 	.pwr_domain_on_finish		= hisi_pwr_domain_on_finish,
-	.pwr_domain_suspend_finish	= hisi_pwr_domain_suspend_finish,
 	.system_off			= hisi_system_off,
 	.system_reset			= hisi_system_reset,
 	.validate_power_state		= hisi_validate_power_state,
 	.validate_ns_entrypoint		= hisi_validate_ns_entrypoint,
-	.get_sys_suspend_power_state	= hisi_get_sys_suspend_power_state,
 };
 
 int plat_setup_psci_ops(uintptr_t sec_entrypoint,

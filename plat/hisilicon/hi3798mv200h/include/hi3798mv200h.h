@@ -123,8 +123,9 @@
 #define HISI_WDG0_BASE			U(0xF8A2C000)
 #define HISI_WDG0_RESET_LOAD		U(0x00249F00)
 
-/* CRG94 gates the watchdog's counting clock (bit 0). */
+/* CRG94 的 bit 0 是看门狗计数时钟的门控；bit 4 置位时让看门狗保持复位。 */
 #define REG_PERI_CRG94			U(0x178)
 #define CRG94_WDG0_CKEN			(U(1) << 0)
+#define CRG94_WDG0_SRST			(U(1) << 4)
 
 #endif /* HI3798MV200H_H */
