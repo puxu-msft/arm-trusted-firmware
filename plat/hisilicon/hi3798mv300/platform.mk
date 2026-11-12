@@ -20,6 +20,8 @@ PRELOADED_BL33_BASE		?= 0x02200000
 HISI_BOOT_WDG			?= 1
 # 厂商 hi3798mv300 BL31 在每次 CPU_ON 释放从核前后都写 REG_CPU_LP；在这颗芯片上保留它的序列，直到有一轮板测证明可以去掉，就像在 hi3798mv200h 上那样。
 HISI_CPU_ON_LP_BRACKET		?= 1
+# CM201-2 无法被远程重新上电（没有 PMIC 控制，也没有唤醒源），所以 PSCI SYSTEM_OFF（poweroff、halt、温控的 critical trip）改为复位板子而不是让各核停驻：盒子经正常启动链重新起来，而不是一直死着，直到有人拔插电源。
+HISI_SYSTEM_OFF_RESETS		?= 1
 
 $(eval $(call add_defines, MV200H_BL31_BASE MV200H_DTB_BASE))
 

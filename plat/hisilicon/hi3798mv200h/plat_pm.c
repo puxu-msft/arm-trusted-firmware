@@ -141,12 +141,20 @@ static void hisi_pwr_domain_on_finish(const psci_power_state_t *target_state)
 	*/
 }
 
+static void __dead2 hisi_system_reset(void);
+
 static void __dead2 hisi_system_off(void)
 {
+#if HISI_SYSTEM_OFF_RESETS
+	/* 板子无法被远程重新上电：复位，而不是让各核停驻。 */
+	NOTICE("System Off: this board cannot be powered back on remotely, resetting\n");
+	hisi_system_reset();
+#else
 	ERROR("mv200h System Off: operation not handled.\n");
 	/* Stop watchdog0 before panic() */
 	sp805_stop(HISI_WDG0_BASE);
 	panic();
+#endif
 }
 
 /*
