@@ -22,6 +22,8 @@ HISI_BOOT_WDG			?= 1
 HISI_CPU_ON_LP_BRACKET		?= 1
 # CM201-2 无法被远程重新上电（没有 PMIC 控制，也没有唤醒源），所以 PSCI SYSTEM_OFF（poweroff、halt、温控的 critical trip）改为复位板子而不是让各核停驻：盒子经正常启动链重新起来，而不是一直死着，直到有人拔插电源。
 HISI_SYSTEM_OFF_RESETS		?= 1
+# 厂商 fastboot 为它的安全内核把所有 GIC 中断线留在 Group 0；把它们交给非安全世界（hisi_gicv2.c: hisi_gic_group1()）。
+HISI_GIC_GROUP1_ALL		?= 1
 
 $(eval $(call add_defines, MV200H_BL31_BASE MV200H_DTB_BASE))
 

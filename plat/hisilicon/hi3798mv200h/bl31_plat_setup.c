@@ -200,6 +200,9 @@ void bl31_platform_setup(void)
 
 	/* Init GIC distributor and CPU interface */
 	hisi_gic_driver_init();
+#if HISI_GIC_GROUP1_ALL
+	hisi_gic_group1(true);
+#endif
 	/*
 	 * R99: not here. gicv2_distif_init()/gicv2_pcpu_distif_init()/
 	 * gicv2_cpuif_enable() rewrite the distributor and the interface from

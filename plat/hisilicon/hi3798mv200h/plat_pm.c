@@ -125,6 +125,10 @@ static void hisi_pwr_domain_on_finish(const psci_power_state_t *target_state)
 {
 	assert(target_state->pwr_domain_state[MPIDR_AFFLVL0] ==
 					PLAT_MAX_OFF_STATE);
+#if HISI_GIC_GROUP1_ALL
+	/* 本核 banked 的 SGI/PPI group 位（见 hisi_gic_group1()）。 */
+	hisi_gic_group1(false);
+#endif
 
 	/*
 	 * R103: no GIC programming here either. This is the same write the

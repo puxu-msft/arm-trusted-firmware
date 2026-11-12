@@ -8,6 +8,7 @@
 #ifndef PLAT_PRIVATE_H
 #define PLAT_PRIVATE_H
 
+#include <stdbool.h>
 #include <common/bl_common.h>
 
 void plat_configure_mmu_el3(unsigned long total_base,
@@ -20,6 +21,9 @@ void plat_configure_mmu_el3(unsigned long total_base,
 unsigned int hisi_calc_core_pos(u_register_t mpidr);
 
 void hisi_gic_driver_init(void);
+#if HISI_GIC_GROUP1_ALL
+void hisi_gic_group1(bool all_lines);
+#endif
 
 #endif /* PLAT_PRIVATE_H */
 
