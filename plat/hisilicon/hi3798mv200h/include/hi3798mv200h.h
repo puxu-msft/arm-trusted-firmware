@@ -92,6 +92,12 @@
 #define REG_PERI_CPU_AARCH_MODE		U(0xF8A80030)
 #define REG_AARCH64_ALL_CORES		U(0xF)
 
+/*
+ * TZPC 外设安全属性：每个 IP 组一位，置位表示非安全世界可以访问；清零的组在非安全侧读出为零（非安全写入是否生效未验证）。与 Poplar 移植是同一个字（plat/hisilicon/poplar: HISI_TZPC_SEC_ATTR_CTRL）。开放掩码取 hi3798mv2x 移植写入的值（github.com/185264646/ATF-hi3798mv2x，分支 hi3798mv2x_mainline），Hi3798MV300 板上的非安全内核曾在这个值下运行，0xf8004000 处的 gpio5 也在其中。
+ */
+#define HISI_TZPC_SEC_ATTR_CTRL		U(0xF8A80010)
+#define HISI_TZPC_NS_OPEN_MASK		U(0xFFF9FFFF)
+
 /* GIC-400.  Same pair the vendor DT gives the kernel. */
 #define GICD_BASE			U(0xF1001000)
 #define GICC_BASE			U(0xF1002000)

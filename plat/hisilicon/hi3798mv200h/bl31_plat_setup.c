@@ -192,9 +192,33 @@ static void hisi_sys_counter_setup(void)
 	mmio_write_32(MV200H_SYS_CNT_BASE + CNTCR_OFF, MV200H_CNTCR_VALUE);
 }
 
+#if HISI_TZPC_NS_OPEN
+/*
+ * 加载器留下的属性字，以及开放后回读的属性字。TZPC 所在的 0xf8a80000 窗口从非安全侧读出全 0（2026-11-14 开放前实测），所以这份副本是从 Linux 看到它的途径：它位于 BL31 的保留 RAM 中（地址查 bl31.elf），经 /dev/mem 读取。
+ */
+static uint32_t hisi_tzpc_attr[2];
+
+/*
+ * 开放非安全内核要驱动的 IP 组。只置位、不清位：加载器已开放的组无论掩码怎么写都保持开放。
+ */
+static void hisi_tzpc_ns_open(void)
+{
+	hisi_tzpc_attr[0] = mmio_read_32(HISI_TZPC_SEC_ATTR_CTRL);
+	mmio_write_32(HISI_TZPC_SEC_ATTR_CTRL,
+		      hisi_tzpc_attr[0] | HISI_TZPC_NS_OPEN_MASK);
+	hisi_tzpc_attr[1] = mmio_read_32(HISI_TZPC_SEC_ATTR_CTRL);
+	flush_dcache_range((uintptr_t)hisi_tzpc_attr, sizeof(hisi_tzpc_attr));
+	NOTICE("BL31: TZPC 0x%x -> 0x%x\n", hisi_tzpc_attr[0],
+	       hisi_tzpc_attr[1]);
+}
+#endif
+
 void bl31_platform_setup(void)
 {
 	hisi_sys_counter_setup();
+#if HISI_TZPC_NS_OPEN
+	hisi_tzpc_ns_open();
+#endif
 	/* Init arch timer */
 	generic_delay_timer_init();
 

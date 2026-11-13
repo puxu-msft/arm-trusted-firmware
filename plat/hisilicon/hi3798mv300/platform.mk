@@ -24,6 +24,8 @@ HISI_CPU_ON_LP_BRACKET		?= 1
 HISI_SYSTEM_OFF_RESETS		?= 1
 # 厂商 fastboot 为它的安全内核把所有 GIC 中断线留在 Group 0；把它们交给非安全世界（hisi_gicv2.c: hisi_gic_group1()）。
 HISI_GIC_GROUP1_ALL		?= 1
+# 同一个 fastboot 还在 TZPC 里把部分 IP 组留成仅安全可访问（前面板 LED 所在的 bank gpio5 从非安全内核读出为零）；开放它们（bl31_plat_setup.c: hisi_tzpc_ns_open()）。
+HISI_TZPC_NS_OPEN		?= 1
 
 $(eval $(call add_defines, MV200H_BL31_BASE MV200H_DTB_BASE))
 
