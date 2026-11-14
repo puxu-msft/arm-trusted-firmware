@@ -98,6 +98,11 @@
 #define HISI_TZPC_SEC_ATTR_CTRL		U(0xF8A80010)
 #define HISI_TZPC_NS_OPEN_MASK		U(0xFFF9FFFF)
 
+/*
+ * PMC6：CPU 供电 buck 的 PWM 调压字（[31:16] = duty + 1，[15:0] = period + 1，电压 = 1250 mV − 2.5 mV × duty，厂商 4.4 内核 device_volt_scale/mpu_get_volt）。fastboot 不写它，冷启动读到的 0x003d00dd（1.10 V）来自复位默认值或更早的阶段。
+ */
+#define HISI_PMC6_CPU_VDD		U(0xF8A23018)
+
 /* GIC-400.  Same pair the vendor DT gives the kernel. */
 #define GICD_BASE			U(0xF1001000)
 #define GICC_BASE			U(0xF1002000)

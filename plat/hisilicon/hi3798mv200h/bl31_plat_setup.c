@@ -213,8 +213,15 @@ static void hisi_tzpc_ns_open(void)
 }
 #endif
 
+/*
+ * BL31 入口时的 PMC6（CPU 调压字）。fastboot 不写 PMC6，所以这就是这次复位后留下的值：用来判断 Linux 降压后经 SysRq-B 或看门狗复位，CPU 电压会不会带着低压进入下一次启动（fastboot 以 1.2 GHz 运行）。与 hisi_tzpc_attr 一样放在 BL31 的保留 RAM 里，Linux 经 /dev/mem 读（地址查 bl31.elf）。
+ */
+static uint32_t hisi_pmc6_at_entry;
+
 void bl31_platform_setup(void)
 {
+	hisi_pmc6_at_entry = mmio_read_32(HISI_PMC6_CPU_VDD);
+	flush_dcache_range((uintptr_t)&hisi_pmc6_at_entry, sizeof(hisi_pmc6_at_entry));
 	hisi_sys_counter_setup();
 #if HISI_TZPC_NS_OPEN
 	hisi_tzpc_ns_open();
