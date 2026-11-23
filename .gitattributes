@@ -1,0 +1,2 @@
+# 设备树源码按文本处理：用户级 attributes 可能按 DTS 音频把 *.dts 标成 binary（宏展开为 -diff -merge -text），在这棵树里写回
+*.dts text eol=lf diff merge
