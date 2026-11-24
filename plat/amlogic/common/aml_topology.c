@@ -12,6 +12,10 @@
 
 /* The power domain tree descriptor */
 static unsigned char power_domain_tree_desc[] = {
+#ifdef PLATFORM_SYSTEM_COUNT
+	/* 根是系统级，下挂各簇（platform_def.h 定义了系统级的平台） */
+	PLATFORM_SYSTEM_COUNT,
+#endif
 	/* Number of root nodes */
 	PLATFORM_CLUSTER_COUNT,
 	/* Number of children for the first node */

@@ -70,6 +70,14 @@ USE_COHERENT_MEM		:= 0
 PSCI_NS_EP_FOLLOWS_CALLER	:= 1
 INIT_UNUSED_NS_EL2		:= 1
 
+# 核级掉电挂起与待机（厂商 4.9 内核的 cpuidle 用 CPU_SUSPEND 0x10000）；整机挂起待上机验证，缺省关
+AML_PSCI_CPU_SUSPEND		:= 1
+# A55 不做 CPU0 下电的缓存维护：CPU0 的 CPU_OFF 也经 SCP 真下电（g12a_pm.c 的 AML_CPU0_POWER_DOWN）
+AML_CPU0_POWER_DOWN		:= 1
+AML_PSCI_SYSTEM_SUSPEND		:= 0
+$(eval $(call assert_booleans, AML_PSCI_CPU_SUSPEND AML_PSCI_SYSTEM_SUSPEND AML_CPU0_POWER_DOWN))
+$(eval $(call add_defines, AML_PSCI_CPU_SUSPEND AML_PSCI_SYSTEM_SUSPEND AML_CPU0_POWER_DOWN))
+
 # 核号在 MPIDR 的 Aff1（兼认 Aff0 形式的目标 MPIDR）
 AML_MPIDR_AFF1_CORE		:= 1
 $(eval $(call assert_boolean,AML_MPIDR_AFF1_CORE))

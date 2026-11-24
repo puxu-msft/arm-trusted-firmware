@@ -10,6 +10,7 @@
 #include <drivers/arm/gicv2.h>
 #include <drivers/console.h>
 #include <errno.h>
+#include <stdbool.h>
 #include <lib/el3_runtime/context_mgmt.h>
 #include <lib/mmio.h>
 #include <lib/psci/psci.h>
@@ -25,8 +26,34 @@
 #define SCPI_SYSTEM_SHUTDOWN	0
 #define SCPI_SYSTEM_REBOOT	1
 
+/*
+ * 核级掉电挂起（CPU_SUSPEND）与核级待机：平台在 platform.mk 里打开（AML_PSCI_CPU_SUSPEND）；整机挂起（SYSTEM_SUSPEND）另有开关 AML_PSCI_SYSTEM_SUSPEND，要求电源域树有系统级（PLATFORM_SYSTEM_COUNT）。
+ */
+#ifndef AML_PSCI_CPU_SUSPEND
+#define AML_PSCI_CPU_SUSPEND	0
+#endif
+#ifndef AML_PSCI_SYSTEM_SUSPEND
+#define AML_PSCI_SYSTEM_SUSPEND	0
+#endif
+#if AML_PSCI_SYSTEM_SUSPEND && !(AML_PSCI_CPU_SUSPEND && defined(PLATFORM_SYSTEM_COUNT))
+#error "AML_PSCI_SYSTEM_SUSPEND needs AML_PSCI_CPU_SUSPEND and a system power level"
+#endif
+/*
+ * CPU0 的 CPU_OFF：上游 g12a 用 WFE 循环模拟（CPU0 不真下电，CPU_ON 时关 MMU 跳回 warm 入口），前提是 A53 的 core_pwr_dwn 已刷过 L1 并退出一致性。HW_ASSISTED_COHERENCY 的平台（SM1 的 A55）不做这份缓存维护，关 MMU 后在同一块 per-cpu 栈上跑 C 代码会读到旧缓存行，所以这类平台打开 AML_CPU0_POWER_DOWN，让 CPU0 与其它核一样经 SCP 真下电、经邮箱入口回来，与厂商 g12a BL31 相同（CPU_ON 0x511974c、CPU_OFF 0x5119bdc 都不特判 CPU0）。
+ */
+#ifndef AML_CPU0_POWER_DOWN
+#define AML_CPU0_POWER_DOWN	0
+#endif
+
+/* 唤醒整机挂起后重新设置 AO UART（厂商系统级恢复同样重设控制台，0x5119d14 → 0x5117d58）；console_meson_init 只写 UART 寄存器、不登记控制台 */
+int console_meson_init(uintptr_t base_addr, uint32_t uart_clk, uint32_t baud_rate);
+
 static uintptr_t g12a_sec_entrypoint;
 static volatile uint32_t g12a_cpu0_go;
+#if AML_PSCI_CPU_SUSPEND
+/* 正在核级掉电挂起的核：pwr_domain_pwr_down 据此区分挂起与 CPU_OFF（CPU0 的 CPU_OFF 是 WFE 模拟，挂起是真掉电） */
+static volatile uint8_t g12a_cpu_suspending[PLATFORM_CORE_COUNT];
+#endif
 
 static void g12a_pm_set_reset_addr(u_register_t mpidr, uint64_t value)
 {
@@ -139,12 +166,18 @@ static void __dead2 g12a_system_off(void)
 	panic();
 }
 
+/* CPU0 的 CPU_OFF 是否用 WFE 模拟（见 AML_CPU0_POWER_DOWN） */
+static bool g12a_cpu0_emulated(unsigned int core)
+{
+	return (core == AML_PRIMARY_CPU) && (AML_CPU0_POWER_DOWN == 0);
+}
+
 static int32_t g12a_pwr_domain_on(u_register_t mpidr)
 {
 	unsigned int core = plat_calc_core_pos(mpidr);
 
 	/* CPU0 can't be turned OFF */
-	if (core == AML_PRIMARY_CPU) {
+	if (g12a_cpu0_emulated(core)) {
 		VERBOSE("BL31: Releasing CPU0 from wait loop...\n");
 
 		g12a_cpu0_go = 1;
@@ -184,6 +217,9 @@ static void g12a_pwr_domain_on_finish(const psci_power_state_t *target_state)
 
 	gicv2_pcpu_distif_init();
 	gicv2_cpuif_enable();
+
+	/* 起来以后撤掉邮箱入口，与厂商相同（0x5119ca4） */
+	g12a_pm_set_reset_addr(read_mpidr_el1(), 0);
 }
 
 static void g12a_pwr_domain_off(const psci_power_state_t *target_state)
@@ -194,13 +230,135 @@ static void g12a_pwr_domain_off(const psci_power_state_t *target_state)
 	gicv2_cpuif_disable();
 
 	/* CPU0 can't be turned OFF */
-	if (core == AML_PRIMARY_CPU)
+	if (g12a_cpu0_emulated(core))
 		return;
 
+	/* 下电前邮箱 +8 写全 1，与厂商的 CPU_OFF 相同（0x5119c24–0x5119c2c） */
+	g12a_pm_mailbox_arm(mpidr);
 	aml_scpi_set_css_power_state(core,
 				     SCPI_POWER_OFF, SCPI_POWER_ON,
 				     SCPI_POWER_ON);
 }
+
+#if AML_PSCI_CPU_SUSPEND
+/*
+ * 原始格式的 power_state（PSCI_EXTENDED_STATE_ID=0）：待机只认核级；掉电把 0..PowerLevel 级都置 OFF；StateID 必须为 0。与厂商 g12a BL31 的 validate_power_state（0x51197c0）相同；厂商 4.9 内核的 DT 空闲态 CPU_SLEEP_0 用 0x10000（核级掉电）。
+ */
+static int g12a_validate_power_state(unsigned int power_state,
+				     psci_power_state_t *req_state)
+{
+	unsigned int pwr_lvl = psci_get_pstate_pwrlvl(power_state);
+	unsigned int i;
+
+	assert(req_state != NULL);
+
+	if (pwr_lvl > PLAT_MAX_PWR_LVL)
+		return PSCI_E_INVALID_PARAMS;
+
+	if (psci_get_pstate_type(power_state) == PSTATE_TYPE_STANDBY) {
+		if (pwr_lvl != MPIDR_AFFLVL0)
+			return PSCI_E_INVALID_PARAMS;
+		req_state->pwr_domain_state[MPIDR_AFFLVL0] =
+					PLAT_LOCAL_STATE_RET;
+	} else {
+		for (i = MPIDR_AFFLVL0; i <= pwr_lvl; i++)
+			req_state->pwr_domain_state[i] = PLAT_LOCAL_STATE_OFF;
+	}
+
+	if (psci_get_pstate_id(power_state) != 0U)
+		return PSCI_E_INVALID_PARAMS;
+
+	return PSCI_E_SUCCESS;
+}
+
+/* 核级待机：WFI 期间让 IRQ/FIQ 路由到 EL3 也能唤醒，与厂商相同（0x5119b80–0x5119bd8） */
+static void g12a_cpu_standby(plat_local_state_t cpu_state)
+{
+	u_register_t scr = read_scr_el3();
+
+	assert(cpu_state == PLAT_LOCAL_STATE_RET);
+
+	write_scr_el3(scr | SCR_IRQ_BIT | SCR_FIQ_BIT);
+	isb();
+	dsb();
+	wfi();
+	write_scr_el3(scr);
+}
+
+static uint32_t g12a_scpi_level_state(const psci_power_state_t *target_state,
+				      unsigned int lvl)
+{
+	return (target_state->pwr_domain_state[lvl] == PLAT_LOCAL_STATE_OFF) ?
+		SCPI_POWER_OFF : SCPI_POWER_ON;
+}
+
+/*
+ * 掉电挂起，照厂商 g12a BL31（0x5119890–0x511990c、0x5119840–0x511988c）：邮箱入口写 warm boot 入口（CPU0 也一样：厂商对 CPU0 同样经邮箱掉电、经 SCP 唤醒），AO_SEC_GP_CFG7 置本核的挂起位，邮箱 +8 写全 1，关本核的 GIC CPU 接口，再按目标状态请 SCP 关核、关簇（簇级 OFF 时）、关整机（系统级 OFF 时）。
+ */
+static void g12a_pwr_domain_suspend(const psci_power_state_t *target_state)
+{
+	u_register_t mpidr = read_mpidr_el1();
+	unsigned int core = plat_calc_core_pos(mpidr);
+	uint32_t css = SCPI_POWER_ON;
+
+	if (target_state->pwr_domain_state[MPIDR_AFFLVL0] !=
+	    PLAT_LOCAL_STATE_OFF)
+		return;
+
+	g12a_cpu_suspending[core] = 1U;
+	g12a_pm_set_reset_addr(mpidr, g12a_sec_entrypoint);
+	mmio_setbits_32(AML_AO_SEC_GP_CFG7,
+			U(1) << (AML_AO_SEC_GP_CFG7_CPU_SHIFT + core));
+	g12a_pm_mailbox_arm(mpidr);
+	gicv2_cpuif_disable();
+#ifdef PLATFORM_SYSTEM_COUNT
+	css = g12a_scpi_level_state(target_state, MPIDR_AFFLVL2);
+#endif
+	aml_scpi_set_css_power_state(core, SCPI_POWER_OFF,
+				     g12a_scpi_level_state(target_state,
+							   MPIDR_AFFLVL1),
+				     css);
+}
+
+/*
+ * 掉电挂起之后由 SCP 唤醒、经邮箱入口 warm boot 回来（retention 不经这里）：清本核的挂起位，系统级挂起后先重建 GIC 分发器，再开本核的 GIC 接口、撤掉邮箱入口。与厂商相同（0x5119cac–0x5119d50）。
+ */
+static void g12a_pwr_domain_suspend_finish(const psci_power_state_t *target_state)
+{
+	u_register_t mpidr = read_mpidr_el1();
+	unsigned int core = plat_calc_core_pos(mpidr);
+
+	if (target_state->pwr_domain_state[MPIDR_AFFLVL0] !=
+	    PLAT_LOCAL_STATE_OFF)
+		return;
+
+	mmio_clrbits_32(AML_AO_SEC_GP_CFG7,
+			U(1) << (AML_AO_SEC_GP_CFG7_CPU_SHIFT + core));
+	g12a_cpu_suspending[core] = 0U;
+#ifdef PLATFORM_SYSTEM_COUNT
+	if (target_state->pwr_domain_state[MPIDR_AFFLVL2] ==
+	    PLAT_LOCAL_STATE_OFF) {
+		(void)console_meson_init(AML_UART0_AO_BASE,
+					 AML_UART0_AO_CLK_IN_HZ,
+					 AML_UART_BAUDRATE);
+		gicv2_distif_init();
+	}
+#endif
+	gicv2_pcpu_distif_init();
+	gicv2_cpuif_enable();
+	g12a_pm_set_reset_addr(mpidr, 0);
+}
+
+#if AML_PSCI_SYSTEM_SUSPEND
+static void g12a_get_sys_suspend_power_state(psci_power_state_t *req_state)
+{
+	unsigned int i;
+
+	for (i = MPIDR_AFFLVL0; i <= PLAT_MAX_PWR_LVL; i++)
+		req_state->pwr_domain_state[i] = PLAT_LOCAL_STATE_OFF;
+}
+#endif
+#endif /* AML_PSCI_CPU_SUSPEND */
 
 static void __dead2 g12a_pwr_domain_pwr_down_wfi(const psci_power_state_t
 						 *target_state)
@@ -208,8 +366,20 @@ static void __dead2 g12a_pwr_domain_pwr_down_wfi(const psci_power_state_t
 	u_register_t mpidr = read_mpidr_el1();
 	unsigned int core = plat_calc_core_pos(mpidr);
 
+#if AML_PSCI_CPU_SUSPEND
+	/*
+	 * 掉电挂起：邮箱 +8 写 0 后在 WFI 里等 SCP 断电，不回卷（厂商 0x5119910 与 0x51272e0 同样不回卷：SCP 已收到关核命令，醒来接着跑会与它断电相撞）。偶发唤醒就再 WFI。
+	 */
+	if (g12a_cpu_suspending[core] != 0U) {
+		g12a_pm_reset(mpidr);
+		dsbsy();
+		for (;;)
+			wfi();
+	}
+#endif
+
 	/* CPU0 can't be turned OFF, emulate it with a WFE loop */
-	if (core == AML_PRIMARY_CPU) {
+	if (g12a_cpu0_emulated(core)) {
 		VERBOSE("BL31: CPU0 entering wait loop...\n");
 
 		while (g12a_cpu0_go == 0)
@@ -243,6 +413,15 @@ static const plat_psci_ops_t g12a_ops = {
 	.pwr_domain_on_finish		= g12a_pwr_domain_on_finish,
 	.pwr_domain_off			= g12a_pwr_domain_off,
 	.pwr_domain_pwr_down		= g12a_pwr_domain_pwr_down_wfi,
+#if AML_PSCI_CPU_SUSPEND
+	.cpu_standby			= g12a_cpu_standby,
+	.validate_power_state		= g12a_validate_power_state,
+	.pwr_domain_suspend		= g12a_pwr_domain_suspend,
+	.pwr_domain_suspend_finish	= g12a_pwr_domain_suspend_finish,
+#if AML_PSCI_SYSTEM_SUSPEND
+	.get_sys_suspend_power_state	= g12a_get_sys_suspend_power_state,
+#endif
+#endif
 	.system_off			= g12a_system_off,
 	.system_reset			= g12a_system_reset
 };

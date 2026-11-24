@@ -26,8 +26,13 @@
 
 #define AML_PRIMARY_CPU			U(0)
 
-#define PLAT_MAX_PWR_LVL		MPIDR_AFFLVL1
-#define PLAT_NUM_PWR_DOMAINS		(PLATFORM_CLUSTER_COUNT + \
+/*
+ * 电源域树带系统级（核、簇、整机三级）：厂商 g12a BL31 的挂起按三级算发给 SCP 的状态（SCPI 的 css 位取系统级，0x5119840），整机挂起的目标状态也是三级都 OFF（0x511970c）。
+ */
+#define PLATFORM_SYSTEM_COUNT		U(1)
+#define PLAT_MAX_PWR_LVL		MPIDR_AFFLVL2
+#define PLAT_NUM_PWR_DOMAINS		(PLATFORM_SYSTEM_COUNT + \
+					 PLATFORM_CLUSTER_COUNT + \
 					 PLATFORM_CORE_COUNT)
 
 #define PLAT_MAX_RET_STATE		U(1)
