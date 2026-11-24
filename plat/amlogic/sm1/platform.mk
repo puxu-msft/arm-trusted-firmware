@@ -78,6 +78,11 @@ AML_PSCI_SYSTEM_SUSPEND		:= 0
 $(eval $(call assert_booleans, AML_PSCI_CPU_SUSPEND AML_PSCI_SYSTEM_SUSPEND AML_CPU0_POWER_DOWN))
 $(eval $(call add_defines, AML_PSCI_CPU_SUSPEND AML_PSCI_SYSTEM_SUSPEND AML_CPU0_POWER_DOWN))
 
+# 厂商 SiP 的小项（HDMITX 安全寄存器、挂起与重启原因、AML_DATA_PROCESS 的 0x40/0x100），见 plat/amlogic/g12a/g12a_def.h
+AML_SIP_VENDOR_SMALL		:= 1
+$(eval $(call assert_boolean,AML_SIP_VENDOR_SMALL))
+$(eval $(call add_define,AML_SIP_VENDOR_SMALL))
+
 # 试验辅助（只给 RAM 试验件）：冷启动武装 EE 看门狗、日志另写一份到内存（plat/amlogic/g12a/g12a_bl31_setup.c）
 AML_TRIAL			:= 0
 AML_TRIAL_WDT_MS		:= 30000

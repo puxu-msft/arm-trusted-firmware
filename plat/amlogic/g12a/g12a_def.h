@@ -173,6 +173,57 @@
 #define AML_SM_JTAG_OFF				U(0x82000041)
 #define AML_SM_GET_CHIP_ID			U(0x82000044)
 
+/*
+ * 厂商 g12a BL31 的 SiP 里，现役 Android 9（厂商 4.9 内核与厂商 BL33）要用、又不涉及安全存储的几个（调用方盘点与 M12 docs/19 §9 的复查；eFuse 写只回 0、不写；PLAT=sm1 打开 AML_SIP_VENDOR_SMALL）：
+ * - 0x82000018/19：HDMITX 安全寄存器读、写（厂商 0x511ed20、0x511eda4；地址的编码见 aml_sip_svc.c）；
+ * - 0x82000042：设挂起原因，AO_RTI_STATUS_REG3[11:8] = (x1 == 1)（厂商 0x5119eb8；内核关机前发 0x82000042(1)）；
+ * - 0x82000043：SET_USB_BOOT，模式 1、2、3、4 把 AO_RTI_STATUS_REG3[15:12] 写成 0、1、2、8，其余模式不改，一律回 0（厂商 0x5119ee4 与跳转表 0x5128048；厂商 BL33 在 ROM USB 启动时的烧录分支 0x105857c 先发 0x82000043(1)，set_usb_boot 命令 0x1045ad0 也发它；厂商 BL2 0xfffa382c 在 [15:12] = 2 时把启动设备当作 7）；
+ * - 0x8200003D：读 eFuse 的校准数据（厂商 0x5118150 → 平台操作表 +0xa8 = 0x511a50c）：x1 是偏移、x2 是长度，按 32 位比较，偏移 ≤ 6、长度 ≤ 7、1 ≤ 偏移 + 长度 ≤ 7 时把整片 eFuse 的字节 [0x11 + 偏移, 0x11 + 偏移 + 长度) 读进输出共享区、回读到的字节数，否则回 0。偏移是整片 eFuse 的字节坐标，与 0x82000030 的用户区坐标不同（那里加 0x1A0，0x511a3dc）；读法同 0x82000030（厂商 0x5118db0：SCPI eFuse 读，回 SCP 给的字节数）。调用方是厂商 BL33 的 eFuse 封装 0x1002300（类型 4）：返回值不为 0 就当字节数从输出共享区拷出（0x10023f4 sxtw 后调 memcpy），回 SMC_UNK 就拷 −1 个字节；开机路径上的 0x106e2d8 → 0x105474c 读偏移 0 起 7 字节、要求回 7；
+ * - 0x82000031：eFuse 写，不提供，一律回 0（写了 0 字节）。厂商 BL33 的 eFuse 封装 0x1002300 对类型 1 只看返回值是否为 0（0x1002400：0 报失败、非 0 报成功），回 SMC_UNK 会让 efuse 写命令误报成功；内核的 eFuse 写在 M12 上不可达（DT 的 efuse 节点 disabled）；
+ * - 0x82000046：TEST_N 的输出使能（厂商 0x5119570）：x1 = 1 时置 AO_GPIO_TEST_N（0xFF800140）bit0，x1 = 0 时清，其余不改，回 0；内核 meson_g12a_aobus_init 开机发一次 0x82000046(1)；
+ * - 0x82000049：设重启原因，AO_RTI_STATUS_REG3[3:0]（厂商 0x5119e94）；
+ * - 0x8200004A：DMC 安全寄存器的读写代理（厂商 0x5119f70）：x1 地址、x2 值、x3 = 0 读（回读到的 32 位）、1 写（回 0），x3 其余值回 0。厂商不查地址；这里只代理内核 dmc_monitor 用到的那一页（DT 的 reg_base 0xFF639000 起 0x400 字节、4 字节对齐），页外读回 0、写不做——照厂商不查地址，非安全世界就能经它读写 BL31 自己的内存（E 在那里，与“不把 E 交给非安全世界”冲突），页表外的地址还会让 EL3 取址异常。内核 dmc_monitor 每秒读、写一次 DMC_SEC_STATUS（0xFF6392E0），回 SMC_UNK 时每次都在 EL3 打一行错误日志；
+ * - 0x820000FF：AML_DATA_PROCESS，只认类型 0x40 与 0x100、不做事、回 0（厂商 bootm 的 aml_sec_boot_check 发 0x40，回非 0 就中止引导），别的类型（eFuse 写、口令等）一律回 SMC_UNK。
+ */
+#define AML_SM_HDMITX_SEC_READ			U(0x82000018)
+#define AML_SM_HDMITX_SEC_WRITE			U(0x82000019)
+#define AML_SM_SET_SUSPEND_REASON		U(0x82000042)
+#define AML_SM_SET_USB_BOOT			U(0x82000043)
+#define AML_SM_EFUSE_READ_CALI			U(0x8200003D)
+#define AML_SM_EFUSE_WRITE			U(0x82000031)
+#define AML_SM_TEST_N_OUTPUT			U(0x82000046)
+#define AML_SM_DMC_RW				U(0x8200004A)
+#define AML_SM_SET_REBOOT_REASON		U(0x82000049)
+#define AML_SM_DATA_PROCESS			U(0x820000FF)
+
+#define AML_DATA_PROCESS_BOOT_CHECK		U(0x40)
+#define AML_DATA_PROCESS_NOOP_0x100		U(0x100)
+
+/* eFuse 校准数据的窗口（SiP 0x8200003D）：整片 eFuse 的字节坐标 */
+#define AML_EFUSE_CALI_BASE			U(0x11)
+#define AML_EFUSE_CALI_SPAN			U(7)
+#define AML_EFUSE_CALI_OFFSET_MAX		U(6)
+
+#define AML_AO_GPIO_TEST_N			UL(0xFF800140)
+
+/* DMC 安全寄存器页（SiP 0x8200004A 代理的范围，厂商 DT 的 dmc_monitor reg_base） */
+#define AML_DMC_SEC_BASE			UL(0xFF639000)
+#define AML_DMC_SEC_SIZE			UL(0x400)
+
+/* HDMITX：厂商 SiP 0x18/0x19 允许的两块（厂商 0x511ed20–0x511eda0） */
+#define AML_HDMITX_SEC_BASE			UL(0xFF600000)
+#define AML_HDMITX_SEC_SIZE			UL(0x00010000)
+#define AML_HDMITX_SEC_DWC_SEL			U(0x10000000)
+#define AML_HDMITX_SEC_OFF_MASK			U(0x00FFFFFF)
+#define AML_HDMITX_DWC_BASE			UL(0xFF600000)
+#define AML_HDMITX_DWC_MAX			U(0x7E31)
+#define AML_HDMITX_TOP_BASE			UL(0xFF608000)
+#define AML_HDMITX_TOP_MAX			U(0x365E)
+#define AML_HDMITX_TOP_BYTE_START		U(0x2000)
+
+#define AML_AO_RTI_STATUS_REG3_SUSPEND_MASK	U(0x0F00)
+#define AML_AO_RTI_STATUS_REG3_SUSPEND		U(0x0100)
+
 #define AML_JTAG_STATE_ON			U(0)
 #define AML_JTAG_STATE_OFF			U(1)
 

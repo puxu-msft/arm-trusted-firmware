@@ -37,6 +37,20 @@ uint64_t aml_efuse_read(void *dst, uint32_t offset, uint32_t size)
 
 	return aml_scpi_efuse_read(dst, offset + AML_EFUSE_USER_BASE, size);
 }
+
+#ifdef AML_EFUSE_CALI_BASE
+/*
+ * eFuse 校准数据（SiP 0x8200003D，g12a_def.h）：只读整片 eFuse 字节 [AML_EFUSE_CALI_BASE, AML_EFUSE_CALI_BASE + AML_EFUSE_CALI_SPAN) 这一窗口。参数检查与厂商 0x511a50c 逐条相同，不合法回 0；长度 0 而偏移非 0 时厂商照样发 SCPI 读（回 SCP 给的字节数），这里同样发，按请求长度截断后回 0。
+ */
+uint64_t aml_efuse_read_cali(void *dst, uint32_t offset, uint32_t size)
+{
+	if ((offset > AML_EFUSE_CALI_OFFSET_MAX) || (size > AML_EFUSE_CALI_SPAN) ||
+	    ((offset + size) == 0U) || ((offset + size) > AML_EFUSE_CALI_SPAN))
+		return 0;
+
+	return aml_scpi_efuse_read(dst, AML_EFUSE_CALI_BASE + offset, size);
+}
+#endif
 #else
 #define EFUSE_BASE	0x140
 #define EFUSE_SIZE	0xC0

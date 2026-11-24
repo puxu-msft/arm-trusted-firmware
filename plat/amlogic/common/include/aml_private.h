@@ -36,6 +36,7 @@ uint32_t aml_scpi_get_chip_id(uint8_t *obuff, uint32_t osize);
 /* Peripherals */
 void aml_thermal_unknown(void);
 uint64_t aml_efuse_read(void *dst, uint32_t offset, uint32_t size);
+uint64_t aml_efuse_read_cali(void *dst, uint32_t offset, uint32_t size);
 uint64_t aml_efuse_user_max(void);
 
 #endif /* AML_PRIVATE_H */

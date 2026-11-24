@@ -63,6 +63,13 @@
 						AML_TZRAM_SIZE,			\
 						MT_DEVICE | MT_RW | MT_SECURE)
 
+#if defined(AML_SIP_VENDOR_SMALL) && AML_SIP_VENDOR_SMALL
+/* HDMITX 安全寄存器（SiP 0x82000018/19 直通，g12a_def.h） */
+#define MAP_HDMITX_SEC		MAP_REGION_FLAT(AML_HDMITX_SEC_BASE,		\
+						AML_HDMITX_SEC_SIZE,		\
+						MT_DEVICE | MT_RW | MT_SECURE)
+#endif
+
 static const mmap_region_t g12a_mmap[] = {
 	MAP_NSDRAM0,
 	MAP_NS_SHARE_MEM,
@@ -77,6 +84,9 @@ static const mmap_region_t g12a_mmap[] = {
 	MAP_SEC_DEVICE1,
 	MAP_SEC_DEVICE2,
 	MAP_TZRAM,
+#if defined(AML_SIP_VENDOR_SMALL) && AML_SIP_VENDOR_SMALL
+	MAP_HDMITX_SEC,
+#endif
 	{0}
 };
 
