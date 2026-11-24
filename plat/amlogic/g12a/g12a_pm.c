@@ -117,7 +117,7 @@ static int32_t g12a_pwr_domain_on(u_register_t mpidr)
 	}
 
 	g12a_pm_set_reset_addr(mpidr, g12a_sec_entrypoint);
-	aml_scpi_set_css_power_state(mpidr,
+	aml_scpi_set_css_power_state(core,
 				     SCPI_POWER_ON, SCPI_POWER_ON, SCPI_POWER_ON);
 	dmbsy();
 	sev();
@@ -155,7 +155,7 @@ static void g12a_pwr_domain_off(const psci_power_state_t *target_state)
 	if (core == AML_PRIMARY_CPU)
 		return;
 
-	aml_scpi_set_css_power_state(mpidr,
+	aml_scpi_set_css_power_state(core,
 				     SCPI_POWER_OFF, SCPI_POWER_ON,
 				     SCPI_POWER_ON);
 }

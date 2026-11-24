@@ -58,6 +58,9 @@ static uint32_t aml_scpi_secure_message_receive(void **message_out, size_t *size
 	return response;
 }
 
+/*
+ * mpidr 的 [3:0] 是簇内核号、[11:8] 是簇号（GXL/G12A 的 A53 MPIDR 布局）。核号在 Aff1 的平台（SM1）要传换算后的核号：SCP 只按 [3:0] 认核（厂商 g12a BL31 下电、挂起时传的是换算后的核号，0x5119840、0x5119890）。
+ */
 void aml_scpi_set_css_power_state(u_register_t mpidr, uint32_t cpu_state,
 			      uint32_t cluster_state, uint32_t css_state)
 {

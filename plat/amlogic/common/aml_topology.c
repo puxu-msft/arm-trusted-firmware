@@ -40,8 +40,20 @@ int plat_core_pos_by_mpidr(u_register_t mpidr)
 	if (mpidr & ~(MPIDR_CLUSTER_MASK | MPIDR_CPU_MASK))
 		return -1;
 
+#if defined(AML_MPIDR_AFF1_CORE) && AML_MPIDR_AFF1_CORE
+	/*
+	 * 单簇，核号在 Aff1 或 Aff0（见 aml_helpers.S 的 plat_calc_core_pos）：两个字段只许一个不为 0。
+	 */
+	cluster_id = 0U;
+	cpu_id = (mpidr >> MPIDR_AFF1_SHIFT) & MPIDR_AFFLVL_MASK;
+	if (cpu_id == 0U)
+		cpu_id = (mpidr >> MPIDR_AFF0_SHIFT) & MPIDR_AFFLVL_MASK;
+	else if (((mpidr >> MPIDR_AFF0_SHIFT) & MPIDR_AFFLVL_MASK) != 0U)
+		return -1;
+#else
 	cluster_id = (mpidr >> MPIDR_AFF1_SHIFT) & MPIDR_AFFLVL_MASK;
 	cpu_id = (mpidr >> MPIDR_AFF0_SHIFT) & MPIDR_AFFLVL_MASK;
+#endif
 
 	if (cluster_id >= PLATFORM_CLUSTER_COUNT)
 		return -1;

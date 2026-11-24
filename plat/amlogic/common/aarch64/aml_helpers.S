@@ -32,7 +32,17 @@ endfunc plat_my_core_pos
 	 * -----------------------------------------------------
 	 */
 func plat_calc_core_pos
+#if defined(AML_MPIDR_AFF1_CORE) && AML_MPIDR_AFF1_CORE
+	/*
+	 * 核号在 Aff1（A55 置 MT 位，实机 MPIDR 0x81000N00）；内核按 DT 的 cpu reg 给的目标 MPIDR 是 Aff0 形式（0–3）。Aff1 不为 0 取 Aff1，否则取 Aff0，与厂商 g12a BL31 的换算相同（M12 厂商 BL31 0x511a190）。
+	 */
+	ubfx	x1, x0, #MPIDR_AFF1_SHIFT, #MPIDR_AFFINITY_BITS
 	and	x0, x0, #MPIDR_CPU_MASK
+	cmp	x1, #0
+	csel	x0, x1, x0, ne
+#else
+	and	x0, x0, #MPIDR_CPU_MASK
+#endif
 	ret
 endfunc plat_calc_core_pos
 
