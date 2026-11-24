@@ -24,6 +24,13 @@
 						AML_NS_SHARE_MEM_SIZE,		\
 						MT_MEMORY | MT_RW | MT_NS)
 
+#if defined(AML_TRIAL) && AML_TRIAL
+/* 试验构建的内存日志：落在 MAP_NS_SHARE_MEM 之内、另按非缓存映射（xlat v2 允许静态区完全包含，里面的小区先映射，外面的大区不覆盖已有的页） */
+#define MAP_TRIAL_MEMLOG	MAP_REGION_FLAT(AML_TRIAL_MEMLOG_BASE,		\
+						AML_TRIAL_MEMLOG_SIZE,		\
+						MT_NON_CACHEABLE | MT_RW | MT_NS)
+#endif
+
 #define MAP_SEC_SHARE_MEM	MAP_REGION_FLAT(AML_SEC_SHARE_MEM_BASE,		\
 						AML_SEC_SHARE_MEM_SIZE,		\
 						MT_MEMORY | MT_RW | MT_SECURE)
@@ -59,6 +66,9 @@
 static const mmap_region_t g12a_mmap[] = {
 	MAP_NSDRAM0,
 	MAP_NS_SHARE_MEM,
+#if defined(AML_TRIAL) && AML_TRIAL
+	MAP_TRIAL_MEMLOG,
+#endif
 	MAP_SEC_SHARE_MEM,
 	MAP_SEC_DEVICE0,
 	MAP_HDCP_RX,

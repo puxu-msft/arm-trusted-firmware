@@ -78,6 +78,15 @@ AML_PSCI_SYSTEM_SUSPEND		:= 0
 $(eval $(call assert_booleans, AML_PSCI_CPU_SUSPEND AML_PSCI_SYSTEM_SUSPEND AML_CPU0_POWER_DOWN))
 $(eval $(call add_defines, AML_PSCI_CPU_SUSPEND AML_PSCI_SYSTEM_SUSPEND AML_CPU0_POWER_DOWN))
 
+# 试验辅助（只给 RAM 试验件）：冷启动武装 EE 看门狗、日志另写一份到内存（plat/amlogic/g12a/g12a_bl31_setup.c）
+AML_TRIAL			:= 0
+AML_TRIAL_WDT_MS		:= 30000
+$(eval $(call assert_boolean,AML_TRIAL))
+$(eval $(call add_defines, AML_TRIAL AML_TRIAL_WDT_MS))
+ifeq (${AML_TRIAL},1)
+BL31_SOURCES		+=	drivers/coreboot/cbmem_console/aarch64/cbmem_console.S
+endif
+
 # 核号在 MPIDR 的 Aff1（兼认 Aff0 形式的目标 MPIDR）
 AML_MPIDR_AFF1_CORE		:= 1
 $(eval $(call assert_boolean,AML_MPIDR_AFF1_CORE))

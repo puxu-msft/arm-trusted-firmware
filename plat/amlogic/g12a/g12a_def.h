@@ -43,6 +43,22 @@
 #define AML_SHARE_MEM_INPUT_BASE		UL(0x050FE000)
 #define AML_SHARE_MEM_OUTPUT_BASE		UL(0x050FF000)
 
+/*
+ * 试验构建（AML_TRIAL=1）的内存日志：非安全共享区里的一段 cbmem 格式环形缓冲（头 8 字节：u32 正文长、u32 游标，游标 bit31 = 已回绕；见 drivers/coreboot/cbmem_console）。厂商 g12a BL31 把 0x05000000–0x05100000 分作存储输入、输出、块缓冲、消息区（各 0x40000，消息区只用前 0x1C 字节）与 0x050FE000/0x050FF000 的通用输入输出（M12 厂商 BL31 0x5120958–0x5120984、0x5119de4–0x5119df8）；0x050E0000–0x050F0000 落在消息区的空闲部分，厂商 BL2/BL31/BL33 的二进制里没有指向 0x050C0000–0x05100000 的数据字，指令里只有消息区基址与通用输入输出两处。主线 U-Boot 与内核的 DT 把 0x05000000 起 3 MiB 保留给安全监控（secmon@5000000），不会占用它。
+ */
+#define AML_TRIAL_MEMLOG_BASE			UL(0x050E0000)
+#define AML_TRIAL_MEMLOG_SIZE			UL(0x00010000)
+
+/*
+ * EE 看门狗（试验构建用来兜住 BL31 与 BL33 早期的挂死）：寄存器同主线 U-Boot 与 Linux 的 meson_gxbb_wdt；1 ms 时基的 CTRL 值（24 MHz 晶振 / 0x5DC0，CLKDIV_EN、CLK_EN、EE_RESET）与武装顺序同 M12 主线 U-Boot 环境的硬截止（patches/u-boot/m12.env 的 m12_console_deadline：先写不带 EN 的 CTRL、TCNT、清计数，最后置 EN），TCNT 以毫秒计、最大 0xFFFF。
+ */
+#define AML_WDT_CTRL				UL(0xFFD0F0D0)
+#define AML_WDT_TCNT				UL(0xFFD0F0D8)
+#define AML_WDT_RSET				UL(0xFFD0F0DC)
+#define AML_WDT_CTRL_1MS			U(0x03205DC0)
+#define AML_WDT_CTRL_EN				U(0x00040000)
+#define AML_WDT_TCNT_MAX			U(0xFFFF)
+
 #define AML_SEC_DEVICE0_BASE			UL(0xFFD00000)
 #define AML_SEC_DEVICE0_SIZE			UL(0x00026000)
 
