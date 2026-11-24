@@ -182,6 +182,11 @@ ifeq ($(HW_ASSISTED_COHERENCY)-$(USE_COHERENT_MEM),1-1)
         $(error USE_COHERENT_MEM cannot be enabled with HW_ASSISTED_COHERENCY)
 endif
 
+# AArch32 的目标核跳过 EL2，EL2 的寄存器要按“已实现但不用”初始化
+ifeq ($(PSCI_NS_EP_FOLLOWS_CALLER)-$(INIT_UNUSED_NS_EL2),1-0)
+        $(error PSCI_NS_EP_FOLLOWS_CALLER=1 requires INIT_UNUSED_NS_EL2=1)
+endif
+
 #For now, BL2_IN_XIP_MEM is only supported when RESET_TO_BL2 is 1.
 ifeq ($(RESET_TO_BL2)-$(BL2_IN_XIP_MEM),0-1)
         $(error "BL2_IN_XIP_MEM is only supported when RESET_TO_BL2 is enabled")

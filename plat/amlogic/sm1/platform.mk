@@ -66,6 +66,10 @@ SEPARATE_CODE_AND_RODATA	:= 1
 HW_ASSISTED_COHERENCY		:= 1
 USE_COHERENT_MEM		:= 0
 
+# 32 位内核（Android 9 的厂商 4.9）在 SVC 下发 CPU_ON 与 CPU_SUSPEND：副核与恢复的核按调用者的执行态进入，EL2 按“已实现但不用”初始化
+PSCI_NS_EP_FOLLOWS_CALLER	:= 1
+INIT_UNUSED_NS_EL2		:= 1
+
 # 核号在 MPIDR 的 Aff1（兼认 Aff0 形式的目标 MPIDR）
 AML_MPIDR_AFF1_CORE		:= 1
 $(eval $(call assert_boolean,AML_MPIDR_AFF1_CORE))

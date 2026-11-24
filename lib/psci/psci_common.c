@@ -871,6 +871,24 @@ static int psci_get_ns_ep_info(entry_point_info_t *ep,
 	u_register_t ns_scr_el3 = read_scr_el3();
 	u_register_t ns_sctlr_el1 = read_sctlr_el1();
 
+#if PSCI_NS_EP_FOLLOWS_CALLER
+	/*
+	 * 调用者自己在 AArch32（保存的 SPSR_EL3.M[4] = 1）时，目标核按调用者的执行态与模式进入，不按 SCR_EL3 推断。典型是 EL2 已实现但不用、32 位内核跑在 SVC 的系统：引导程序在 AArch64 EL2 运行，清掉 HCR_EL2.RW 后 eret 到 SVC，SCR_EL3.RW 与 HCE 仍是 1，按它们推断会让副核以 AArch64 EL2 执行 32 位内核的入口。调用者在 Hyp 时保留 HCE 进 Hyp，否则进 SVC、字节序取 SCTLR_EL1.EE；cm_init_context 再按入口的 SPSR 清掉 SCR_EL3.RW 与 HCE，cm_prepare_el3_exit 按“EL2 已实现但不用”初始化 EL2，所以要同时开 INIT_UNUSED_NS_EL2。
+	 */
+	{
+		u_register_t caller_spsr = read_ctx_reg(
+			get_el3state_ctx(cm_get_context(NON_SECURE)),
+			CTX_SPSR_EL3);
+
+		if (GET_RW(caller_spsr) == MODE_RW_32) {
+			ns_scr_el3 &= ~SCR_RW_BIT;
+			if (GET_M32(caller_spsr) != MODE32_hyp) {
+				ns_scr_el3 &= ~SCR_HCE_BIT;
+			}
+		}
+	}
+#endif
+
 	sctlr = ((ns_scr_el3 & SCR_HCE_BIT) != 0U) ?
 		read_sctlr_el2() : ns_sctlr_el1;
 	ee = 0;
