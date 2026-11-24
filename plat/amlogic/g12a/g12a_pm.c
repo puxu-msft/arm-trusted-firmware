@@ -10,6 +10,7 @@
 #include <drivers/arm/gicv2.h>
 #include <drivers/console.h>
 #include <errno.h>
+#include <lib/el3_runtime/context_mgmt.h>
 #include <lib/mmio.h>
 #include <lib/psci/psci.h>
 #include <plat/common/platform.h>
@@ -43,21 +44,50 @@ static void g12a_pm_reset(u_register_t mpidr)
 	mmio_write_32(cpu_mailbox_addr, 0);
 }
 
+/*
+ * 每核邮箱 +8 的字：厂商 g12a BL31 在发下电类的 SCPI 命令之前写全 1、命令之后写 0（0x5119794 的各调用点），语义未查，照厂商的次序。
+ */
+static void g12a_pm_mailbox_arm(u_register_t mpidr)
+{
+	unsigned int core = plat_calc_core_pos(mpidr);
+
+	mmio_write_32(AML_PSCI_MAILBOX_BASE + (core << 4) + 8, ~0U);
+}
+
+/*
+ * 下一次启动看到的 AO_RTI_STATUS_REG3：[3:0] 换成 reason；USB 启动标志 [15:12] 只在等于 8（内核 panic 后转 USB）且这次不是 panic 重启时清掉，其余值（如线刷工具设的 1、2）留给下次启动。与厂商 g12a BL31 的复位（0x5119ab0–0x5119b0c）、关机（0x51199a4–0x5119a00）相同。
+ */
+static void g12a_pm_write_reboot_reason(uint32_t reason)
+{
+	uint32_t status = mmio_read_32(AML_AO_RTI_STATUS_REG3);
+	uint32_t next = (status & ~AML_REBOOT_REASON_MASK) | reason;
+
+	if ((((status & AML_USB_BOOT_FLAG_MASK) >> AML_USB_BOOT_FLAG_SHIFT) ==
+	     AML_USB_BOOT_FLAG_PANIC_DUMP) &&
+	    (reason != AML_REBOOT_REASON_KERNEL_PANIC))
+		next &= ~AML_USB_BOOT_FLAG_MASK;
+
+	NOTICE("BL31: Reboot reason: 0x%x -> 0x%x\n", status, next);
+	console_flush();
+
+	mmio_write_32(AML_AO_RTI_STATUS_REG3, next);
+}
+
 static void __dead2 g12a_system_reset(void)
 {
 	INFO("BL31: PSCI_SYSTEM_RESET\n");
 
 	u_register_t mpidr = read_mpidr_el1();
-	uint32_t status = mmio_read_32(AML_AO_RTI_STATUS_REG3);
+	/*
+	 * Amlogic 的内核与引导程序把重启原因放在 SYSTEM_RESET 的 x1（AArch32 调用者是 r1）：标准 PSCI 的 SYSTEM_RESET 不带参数，从这次 SMC 保存的非安全上下文里取，只用低 4 位（厂商 0x5119a98）。
+	 */
+	u_register_t x1 = read_ctx_reg(get_gpregs_ctx(cm_get_context(NON_SECURE)),
+				       CTX_GPREG_X1);
 	int ret;
 
-	NOTICE("BL31: Reboot reason: 0x%x\n", status);
-
-	status &= 0xFFFF0FF0;
-
-	console_flush();
-
-	mmio_write_32(AML_AO_RTI_STATUS_REG3, status);
+	mmio_clrbits_32(AML_AO_SEC_GP_CFG7, AML_AO_SEC_GP_CFG7_CPU_MASK);
+	g12a_pm_write_reboot_reason((uint32_t)x1 & AML_REBOOT_REASON_MASK);
+	g12a_pm_mailbox_arm(mpidr);
 
 	ret = aml_scpi_sys_power_state(SCPI_SYSTEM_REBOOT);
 
@@ -79,7 +109,18 @@ static void __dead2 g12a_system_off(void)
 	INFO("BL31: PSCI_SYSTEM_OFF\n");
 
 	u_register_t mpidr = read_mpidr_el1();
+	unsigned int i;
 	int ret;
+
+	/*
+	 * 与厂商 g12a BL31 的关机相同（0x5119950–0x5119a50）：各核复位向量指回 BootROM，清每核挂起位，重启原因写 8（下次开机即“关机后唤醒”），邮箱入口写全 1，再请 SCP 关机。
+	 */
+	for (i = 0U; i < PLATFORM_CORE_COUNT; i++)
+		mmio_write_32(AML_SYS_CPU_RVBAR0 + (i << 2), AML_SYS_CPU_RVBAR_ROM);
+	mmio_clrbits_32(AML_AO_SEC_GP_CFG7, AML_AO_SEC_GP_CFG7_CPU_MASK);
+	g12a_pm_write_reboot_reason(AML_REBOOT_REASON_POWEROFF);
+	g12a_pm_set_reset_addr(mpidr, ~0ULL);
+	g12a_pm_mailbox_arm(mpidr);
 
 	ret = aml_scpi_sys_power_state(SCPI_SYSTEM_SHUTDOWN);
 
@@ -91,6 +132,7 @@ static void __dead2 g12a_system_off(void)
 	g12a_pm_set_reset_addr(mpidr, 0);
 	g12a_pm_reset(mpidr);
 
+	dsbsy();
 	wfi();
 
 	ERROR("BL31: PSCI_SYSTEM_OFF: Operation not handled\n");
