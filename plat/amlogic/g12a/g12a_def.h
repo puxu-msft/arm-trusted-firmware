@@ -92,7 +92,10 @@
 
 #define AML_SYS_CPU_CFG7			UL(0xFF634664)
 
-#define AML_AO_RTI_STATUS_REG3			UL(0xFF80001C)
+/*
+ * AO_RTI_STATUS_REG3：G12 家族在 AO 寄存器区偏移 0xC（Khadas u-boot arch-g12a/secure_apb.h:3144），不是 AXG 的 0x1C——G12 的 0xFF80001C 是 AO_PAD_DS_A（同文件 3158 行，AO 引脚驱动强度）。[3:0] 是重启原因，[15:12] 是给下次启动的 USB 启动标志；厂商 g12a BL31 的 PSCI 复位与关机写的就是这里（M12 厂商 BL31 反汇编 0x51199a4、0x5119ab0）。
+ */
+#define AML_AO_RTI_STATUS_REG3			UL(0xFF80000C)
 #define AML_AO_RTI_SCP_STAT			UL(0xFF80023C)
 #define AML_AO_RTI_SCP_READY_OFF		U(0x14)
 #define AML_A0_RTI_SCP_READY_MASK		U(3)
@@ -106,6 +109,13 @@
 #define AML_HIU_MAILBOX_SET_3			UL(0xFF63C428)
 #define AML_HIU_MAILBOX_STAT_3			UL(0xFF63C42C)
 #define AML_HIU_MAILBOX_CLR_3			UL(0xFF63C430)
+
+/*
+ * eFuse 用户区（厂商 g12a BL31 的做法，M12 厂商 BL31 反汇编）：用户偏移 0 对应 eFuse 字节 0x1A0（读 0x511a3dc、写 0x511a304 都加 0x1A0），用户区最多 0x60 字节，再减去 eFuse 字节 0x190 给出的 TEE OTP 区（该字节 × 16，超过 0x60 按 0x60 算，0x511a288–0x511a2dc），即 EFUSE_USER_MAX 返回 0x60 − TEE 区（0x511a2e0）。
+ */
+#define AML_EFUSE_USER_BASE			U(0x1A0)
+#define AML_EFUSE_USER_SPAN			U(0x60)
+#define AML_EFUSE_TEE_AREA_SIZE			U(0x190)
 
 #define AML_SHA_DMA_BASE			UL(0xFF63E000)
 #define AML_SHA_DMA_DESC			(AML_SHA_DMA_BASE + 0x08)
