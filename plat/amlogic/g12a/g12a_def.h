@@ -237,6 +237,17 @@
 #define AML_EFUSE_CALI_SPAN			U(7)
 #define AML_EFUSE_CALI_OFFSET_MAX		U(6)
 
+/*
+ * 整片 eFuse：0x200 字节，SCP 按 16 字节一块从 eFuse 控制器取（M12 的 BL30 g12a_v1.1.3394：SCPI 0xC2 的读函数 0x10001468 只收偏移与末字节都不超过 0x1FF 的请求，0x100012bc；按块号写 0xFF630004、等 bit31 清零、从 0xFF630020 起读 4 个字，0x100011fc）。
+ * 试验构建的整片只读导出（AML_TRIAL_EFUSE_DUMP，aml_efuse_dump.c）经本分支私有的 SiP 0x820000F1 把它连同一段尾写进输出共享区，共 AML_EFUSE_DUMP_SIZE 字节。
+ */
+#define AML_EFUSE_SIZE				U(0x200)
+#define AML_EFUSE_BLOCK				U(16)
+#define AML_EFUSE_DUMP_SIZE			(AML_EFUSE_SIZE + U(0x50))
+/* eFuse 控制器的许可寄存器 EFUSE_LIC0–3：LIC0 bit0 安全启动（厂商 BL31 0x5119f9c），bit6 防回滚（厂商 BL2 的 ARB 检查 0xfffab600 起、BL30 0x10002e18 烧防回滚版本号）与 BL2 自动写 RPMB 密钥（0xfffa19a8）；LIC1 bit0/1、LIC2 bit15 音频许可（厂商 BL31 0x511d0ec） */
+#define AML_EFUSE_LIC_BASE			UL(0xFF630030)
+#define AML_SM_TRIAL_EFUSE_DUMP			U(0x820000F1)	/* 本分支私有，只在试验构建里 */
+
 #define AML_AO_GPIO_TEST_N			UL(0xFF800140)
 
 /* DMC 安全寄存器页（SiP 0x8200004A 代理的范围，厂商 DT 的 dmc_monitor reg_base） */

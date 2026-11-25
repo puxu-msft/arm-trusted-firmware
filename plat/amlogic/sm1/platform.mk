@@ -122,6 +122,16 @@ ifeq (${AML_TRIAL},1)
 BL31_SOURCES		+=	drivers/coreboot/cbmem_console/aarch64/cbmem_console.S	\
 				${AML_PLAT_COMMON}/aml_smc_trace.c
 endif
+# 试验构建的整片 eFuse 只读导出（SiP 0x820000F1，plat/amlogic/common/aml_efuse_dump.c）：为把原厂 eFuse 作永久备份单独打开，只能与 AML_TRIAL=1 同开；它把整片 eFuse（含安全存储的取钥材料 E）交给非安全世界（M12 docs/19 §8）
+AML_TRIAL_EFUSE_DUMP		:= 0
+$(eval $(call assert_boolean,AML_TRIAL_EFUSE_DUMP))
+$(eval $(call add_define,AML_TRIAL_EFUSE_DUMP))
+ifeq (${AML_TRIAL_EFUSE_DUMP},1)
+ifneq (${AML_TRIAL}${AML_SSTORE},11)
+  $(error AML_TRIAL_EFUSE_DUMP=1 needs AML_TRIAL=1 and AML_SSTORE=1 on ${PLAT}: the dump hands the whole eFuse (with the secure storage key material) to the normal world, so it is only built into RAM trial builds, and it takes SHA-256 from the secure storage code)
+endif
+BL31_SOURCES		+=	${AML_PLAT_COMMON}/aml_efuse_dump.c
+endif
 # 试验构建把每次 SiP 与 PSCI 调用记进内存日志（plat/amlogic/common/aml_smc_trace.c）
 PLAT_SMC_TRACE			:= ${AML_TRIAL}
 ifeq (${PLAT_SMC_TRACE},1)

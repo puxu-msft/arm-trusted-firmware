@@ -27,6 +27,17 @@
 #define AML_HDCP	0
 #endif
 
+#ifndef AML_TRIAL_EFUSE_DUMP
+#define AML_TRIAL_EFUSE_DUMP	0
+#endif
+
+#if AML_TRIAL_EFUSE_DUMP
+#include <lib/cassert.h>
+/* 导出写进输出共享区，不越过非安全共享区 */
+CASSERT(AML_SHARE_MEM_OUTPUT_BASE + AML_EFUSE_DUMP_SIZE <= AML_NS_SHARE_MEM_BASE + AML_NS_SHARE_MEM_SIZE,
+	assert_efuse_dump_in_ns_share_mem);
+#endif
+
 struct aml_cpu_info {
 	uint32_t version;
 	uint8_t chip_id[16];
@@ -131,6 +142,17 @@ static uintptr_t aml_sip_handler(uint32_t smc_fid,
 
 	case AML_SM_GET_CHIP_ID:
 		SMC_RET1(handle, aml_sip_get_chip_id(x1));
+
+#if AML_TRIAL_EFUSE_DUMP
+	case AML_SM_TRIAL_EFUSE_DUMP:
+	{
+		/* 试验构建的整片 eFuse 只读导出（aml_efuse_dump.c）：参数不用；x0 读出的字节数，x1–x3 读出、字节数不足、两遍不同的块 */
+		uint32_t m[3];
+		uint32_t n = aml_efuse_dump((uint8_t *)AML_SHARE_MEM_OUTPUT_BASE, m);
+
+		SMC_RET4(handle, n, m[0], m[1], m[2]);
+	}
+#endif
 
 #if defined(AML_SIP_VENDOR_SMALL) && AML_SIP_VENDOR_SMALL
 	case AML_SM_HDMITX_SEC_READ:
