@@ -15,6 +15,7 @@
 unsigned int plat_calc_core_pos(u_register_t mpidr);
 void aml_console_init(void);
 void aml_setup_page_tables(void);
+void aml_reset_pen(void);
 
 /* MHU functions */
 void aml_mhu_secure_message_start(void);

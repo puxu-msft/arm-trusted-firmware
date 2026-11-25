@@ -397,8 +397,10 @@ static void __dead2 g12a_pwr_domain_pwr_down_wfi(const psci_power_state_t
 		((void(*)(void))g12a_sec_entrypoint)();
 	}
 
+	/*
+	 * 邮箱入口不清：PSCI 在调到这里之前已把本核记成 OFF，这个窗口里别的核发来的 CPU_ON 会先写好入口再请 SCP 上电，清掉它，本核上电后就在复位向量的等待入口（aml_reset_pen）里一直 WFE。厂商 g12a BL31 的掉电路径同样只写 +8 的字。
+	 */
 	dsbsy();
-	g12a_pm_set_reset_addr(mpidr, 0);
 	g12a_pm_reset(mpidr);
 
 	for (;;)

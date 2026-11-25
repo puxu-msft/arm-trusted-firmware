@@ -121,7 +121,7 @@
 #define AML_SYS_CPU_CFG7			UL(0xFF634664)
 
 /*
- * SYS_CPU_CFG2–5（Khadas u-boot arch-g12a/secure_apb.h:769–778，每核一个）：厂商 BL31 关机前写成 0xFFFF0000（BootROM 入口），按用法推断是各核的复位向量（RVBAR）；关机之后靠遥控器等经 SCP 唤醒时，核从这里起步。
+ * SYS_CPU_CFG2–5（Khadas u-boot arch-g12a/secure_apb.h:769–778，每核一个）：按厂商 BL31 的用法推断是各核的复位向量（RVBAR）——平台初始化时写成自己的等待入口 0x05126000（0x5119d80），关机前写回 0xFFFF0000（BootROM 入口，0x5119950–0x5119984）；关机之后靠遥控器等经 SCP 唤醒时，核从这里起步。AML_RESET_PEN（sm1 打开）照前一种做法写成 aml_reset_pen。
  */
 #define AML_SYS_CPU_RVBAR0			UL(0xFF634650)
 #define AML_SYS_CPU_RVBAR_ROM			U(0xFFFF0000)

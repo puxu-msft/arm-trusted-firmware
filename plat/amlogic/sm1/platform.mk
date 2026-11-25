@@ -117,6 +117,15 @@ AML_MPIDR_AFF1_CORE		:= 1
 $(eval $(call assert_boolean,AML_MPIDR_AFF1_CORE))
 $(eval $(call add_define,AML_MPIDR_AFF1_CORE))
 
+# 各核的复位向量（SYS_CPU_CFG2–5）指向 BL31 的等待入口 aml_reset_pen，核上电后按自己的邮箱跳进 warm boot 入口，与厂商 g12a BL31 相同（plat/amlogic/g12a/g12a_bl31_setup.c）。
+# 核从复位状态直接进 BL31，warm boot 入口要自己初始化 SCTLR_EL3：PROGRAMMABLE_RESET_ADDRESS=1（BL31 的冷启动入口不受它影响，RESET_TO_BL31=0）
+AML_RESET_PEN			:= 1
+$(eval $(call assert_boolean,AML_RESET_PEN))
+$(eval $(call add_define,AML_RESET_PEN))
+ifeq (${AML_RESET_PEN},1)
+PROGRAMMABLE_RESET_ADDRESS	:= 1
+endif
+
 # Verify build config
 # -------------------
 

@@ -200,9 +200,32 @@ static const gicv2_driver_data_t g12a_gic_data = {
 	.interrupt_props_num = ARRAY_SIZE(g12a_interrupt_props)
 };
 
+#if defined(AML_RESET_PEN) && AML_RESET_PEN
+/*
+ * 各核的复位向量指向 BL31 的等待入口 aml_reset_pen（aml_helpers.S），各核的邮箱清零：核上电（CPU_ON、掉电挂起后被唤醒）后在那里等自己的邮箱有入口再跳过去。
+ * 与厂商 g12a BL31 的平台初始化相同（M12 厂商 BL31 0x5119d80：SYS_CPU_CFG2–5 写 0x05126000，再清 0xFFFE7F00 起的邮箱）。上游 g12a 不写复位向量，靠复位向量原值（推断是 BootROM）处理邮箱。
+ */
+static void g12a_reset_pen_setup(void)
+{
+	uint32_t pen = (uint32_t)(uintptr_t)&aml_reset_pen;
+	unsigned int i;
+
+	for (i = 0U; i < PLATFORM_CORE_COUNT; i++) {
+		mmio_write_64(AML_PSCI_MAILBOX_BASE + (i << 4), 0U);
+		mmio_write_32(AML_PSCI_MAILBOX_BASE + (i << 4) + 8U, 0U);
+		mmio_write_32(AML_SYS_CPU_RVBAR0 + (i << 2), pen);
+	}
+	dsbsy();
+	INFO("BL31: reset vectors -> 0x%x (reset pen), mailboxes cleared\n", pen);
+}
+#endif
+
 void bl31_platform_setup(void)
 {
 	aml_mhu_secure_init();
+#if defined(AML_RESET_PEN) && AML_RESET_PEN
+	g12a_reset_pen_setup();
+#endif
 
 	gicv2_driver_init(&g12a_gic_data);
 	gicv2_distif_init();
