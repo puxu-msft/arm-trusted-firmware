@@ -14,6 +14,10 @@
 
 #include "aml_private.h"
 
+#ifndef AML_SSTORE
+#define AML_SSTORE	0
+#endif
+
 struct aml_cpu_info {
 	uint32_t version;
 	uint8_t chip_id[16];
@@ -209,11 +213,27 @@ static uintptr_t aml_sip_handler(uint32_t smc_fid,
 #endif
 
 	default:
+#if AML_SSTORE
+	{
+		u_register_t ret;
+
+		if (aml_sstore_sip(smc_fid, x1, flags, &ret))
+			SMC_RET1(handle, ret);
+	}
+#endif
 		ERROR("BL31: Unhandled SIP SMC: 0x%08x\n", smc_fid);
 		break;
 	}
 
 	SMC_RET1(handle, SMC_UNK);
+}
+
+static int32_t aml_sip_setup(void)
+{
+#if AML_SSTORE
+	aml_sstore_setup();
+#endif
+	return 0;
 }
 
 DECLARE_RT_SVC(
@@ -222,6 +242,6 @@ DECLARE_RT_SVC(
 	OEN_SIP_START,
 	OEN_SIP_END,
 	SMC_TYPE_FAST,
-	NULL,
+	aml_sip_setup,
 	aml_sip_handler
 );

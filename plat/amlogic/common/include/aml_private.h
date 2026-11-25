@@ -7,6 +7,7 @@
 #ifndef AML_PRIVATE_H
 #define AML_PRIVATE_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -38,5 +39,9 @@ void aml_thermal_unknown(void);
 uint64_t aml_efuse_read(void *dst, uint32_t offset, uint32_t size);
 uint64_t aml_efuse_read_cali(void *dst, uint32_t offset, uint32_t size);
 uint64_t aml_efuse_user_max(void);
+
+/* 安全存储（AML_SSTORE） */
+void aml_sstore_setup(void);
+bool aml_sstore_sip(uint32_t fid, u_register_t x1, u_register_t flags, u_register_t *ret);
 
 #endif /* AML_PRIVATE_H */

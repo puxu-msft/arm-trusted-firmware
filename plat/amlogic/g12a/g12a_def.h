@@ -224,6 +224,49 @@
 #define AML_AO_RTI_STATUS_REG3_SUSPEND_MASK	U(0x0F00)
 #define AML_AO_RTI_STATUS_REG3_SUSPEND		U(0x0100)
 
+/*
+ * 安全存储（unifykey，AML_SSTORE=1 时提供，plat/amlogic/common/aml_sstore*.c）：fid 与非安全共享缓冲照厂商 g12a BL31（M12 docs/16 §4.2–§4.3）。四个缓冲各 0x40000、首尾相接：请求、应答、整块加密镜像（内核与引导程序把它与 eMMC reserved 分区的两份副本互拷）、消息区（只用前 0x1C 字节：+4 写后置 1、+8 写计数）。
+ */
+#define AML_SSTORE_IN_BASE			UL(0x05000000)
+#define AML_SSTORE_OUT_BASE			UL(0x05040000)
+#define AML_SSTORE_BLOCK_BASE			UL(0x05080000)
+#define AML_SSTORE_MSG_BASE			UL(0x050C0000)
+
+#define AML_SM_STORAGE_IN_BASE			U(0x82000023)
+#define AML_SM_STORAGE_OUT_BASE			U(0x82000024)
+#define AML_SM_STORAGE_BLOCK_BASE		U(0x82000025)
+#define AML_SM_STORAGE_MSG_BASE			U(0x82000026)
+#define AML_SM_STORAGE_BLOCK_SIZE		U(0x82000027)
+#define AML_SM_SET_STORAGE_INFO			U(0x82000028)
+#define AML_SM_STORAGE_QUERY			U(0x82000060)
+#define AML_SM_STORAGE_READ			U(0x82000061)
+#define AML_SM_STORAGE_WRITE			U(0x82000062)
+#define AML_SM_STORAGE_TELL			U(0x82000063)
+#define AML_SM_STORAGE_VERIFY			U(0x82000064)
+#define AML_SM_STORAGE_STATUS			U(0x82000065)
+#define AML_SM_STORAGE_NOTIFY			U(0x82000066)
+#define AML_SM_STORAGE_LIST			U(0x82000067)
+#define AML_SM_STORAGE_REMOVE			U(0x82000068)
+#define AML_SM_STORAGE_NOTIFY_EX		U(0x82000069)
+#define AML_SM_STORAGE_SET_ENCTYPE		U(0x8200006A)
+#define AML_SM_STORAGE_GET_ENCTYPE		U(0x8200006B)
+#define AML_SM_STORAGE_VERSION			U(0x8200006C)
+
+/*
+ * HDCP 的 key 在不在库（AML_SSTORE 提供，aml_sstore_svc.c）：安全存储里有名为 hdcp、不短于 0x120 字节的 key 时 0x8200001A 回 1，有名为 hdcp22_fw_private、不短于 0x20 字节的 key 时 0x8200001B 回 1，否则回 0（厂商 0x511e764、0x511ea44：从安全存储把这个 key 读进 0x120、0x20 字节的缓冲，读满才回 1；0x5120bd0 拷 min(长度, 缓冲长)）。
+ * 厂商在读之前先看一个“key 已由安全世界交进来”的标志（[0x513b574]、[0x513b69c]），只有安全世界发的 0x82000081、0x82000082 置它（非安全调用者回未知，0x51184d0、0x5118520 的 cbnz x23）；本平台没有安全世界的调用者，这个标志恒为假。内核的 show_hdcp_lstore 按两个返回值报 HDCP 能力，systemcontrol 据此决定做不做 HDCP 认证；回 SMC_UNK 会被当成两种 key 都在（M12 没烧 HDCP key，厂商在这台机器上回 0）。
+ */
+#define AML_SM_HDCP14_KEY_LSTORE		U(0x8200001A)
+#define AML_SM_HDCP22_KEY_LSTORE		U(0x8200001B)
+#define AML_HDCP14_KEY_NAME			"hdcp"
+#define AML_HDCP14_KEY_LEN			U(0x120)
+#define AML_HDCP22_KEY_NAME			"hdcp22_fw_private"
+#define AML_HDCP22_KEY_LEN			U(0x20)
+
+/* SET_STORAGE_INFO 写的 AO 寄存器（[30:28]）；GET_ENCTYPE 读的 ASSIST_HW_REV（厂商拿低字节与 0x23 比，0x23 是 Amlogic 的 TXL 族号） */
+#define AML_SSTORE_INFO_REG			UL(0xFF800248)
+#define AML_ASSIST_HW_REV			UL(0xFFD0814C)
+
 #define AML_JTAG_STATE_ON			U(0)
 #define AML_JTAG_STATE_OFF			U(1)
 
