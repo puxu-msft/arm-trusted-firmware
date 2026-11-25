@@ -101,7 +101,15 @@ AML_TRIAL_WDT_MS		:= 30000
 $(eval $(call assert_boolean,AML_TRIAL))
 $(eval $(call add_defines, AML_TRIAL AML_TRIAL_WDT_MS))
 ifeq (${AML_TRIAL},1)
-BL31_SOURCES		+=	drivers/coreboot/cbmem_console/aarch64/cbmem_console.S
+BL31_SOURCES		+=	drivers/coreboot/cbmem_console/aarch64/cbmem_console.S	\
+				${AML_PLAT_COMMON}/aml_smc_trace.c
+endif
+# 试验构建把每次 SiP 与 PSCI 调用记进内存日志（plat/amlogic/common/aml_smc_trace.c）
+PLAT_SMC_TRACE			:= ${AML_TRIAL}
+ifeq (${PLAT_SMC_TRACE},1)
+ifneq (${AML_TRIAL},1)
+  $(error PLAT_SMC_TRACE=1 needs AML_TRIAL=1 on ${PLAT}: plat_smc_trace() is only built into trial builds (plat/amlogic/common/aml_smc_trace.c))
+endif
 endif
 
 # 核号在 MPIDR 的 Aff1（兼认 Aff0 形式的目标 MPIDR）

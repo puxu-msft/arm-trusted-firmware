@@ -40,6 +40,9 @@ uint64_t aml_efuse_read(void *dst, uint32_t offset, uint32_t size);
 uint64_t aml_efuse_read_cali(void *dst, uint32_t offset, uint32_t size);
 uint64_t aml_efuse_user_max(void);
 
+/* 试验构建（AML_TRIAL）：只写进内存日志的字符串 */
+void aml_trial_memlog_puts(const char *s);
+
 /* 安全存储（AML_SSTORE） */
 void aml_sstore_setup(void);
 bool aml_sstore_sip(uint32_t fid, u_register_t x1, u_register_t flags, u_register_t *ret);

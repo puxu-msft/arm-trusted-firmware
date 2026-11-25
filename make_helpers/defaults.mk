@@ -234,6 +234,9 @@ PSCI_OS_INIT_MODE		:= 0
 # PSCI 的 CPU_ON/CPU_SUSPEND/SYSTEM_SUSPEND：调用者在 AArch32 时目标核按调用者的执行态与模式进入
 PSCI_NS_EP_FOLLOWS_CALLER	:= 0
 
+# PSCI 调用进出时调平台的 plat_smc_trace()（调试用的调用跟踪）
+PLAT_SMC_TRACE			:= 0
+
 # SMCCC_ARCH_FEATURE_AVAILABILITY support
 ARCH_FEATURE_AVAILABILITY	:= 0
 

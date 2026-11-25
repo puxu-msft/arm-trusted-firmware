@@ -514,6 +514,15 @@ int32_t plat_get_soc_name(char *soc_name);
  */
 int32_t plat_is_smccc_feature_available(u_register_t fid);
 
+#if PLAT_SMC_TRACE
+/*
+ * 调用跟踪（PLAT_SMC_TRACE=1 时平台必须提供）：done 为 false 时是调用进入，true 时是返回，ret 是交回调用者的 x0。
+ * handle 是调用者的上下文（可取保存的 SPSR_EL3 判调用者的执行态）。
+ */
+void plat_smc_trace(uint32_t smc_fid, u_register_t x1, u_register_t x2,
+		    u_register_t x3, void *handle, bool done, u_register_t ret);
+#endif
+
 /*
  * Optional function to retrieve the base address of hardware DT from the
  * platform.

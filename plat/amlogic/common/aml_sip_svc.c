@@ -8,6 +8,11 @@
 #include <common/runtime_svc.h>
 #include <lib/mmio.h>
 #include <platform_def.h>
+#if PLAT_SMC_TRACE
+#include <context.h>
+#include <lib/el3_runtime/context_mgmt.h>
+#include <plat/common/platform.h>
+#endif
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -208,7 +213,10 @@ static uintptr_t aml_sip_handler(uint32_t smc_fid,
 		if ((x1 == AML_DATA_PROCESS_BOOT_CHECK) ||
 		    (x1 == AML_DATA_PROCESS_NOOP_0x100))
 			SMC_RET1(handle, 0);
+#if !PLAT_SMC_TRACE
+		/* 跟踪打开时由调用跟踪记（按 fid 限次），不在这里每次都写，免得卷掉内存日志 */
 		WARN("BL31: AML_DATA_PROCESS type 0x%lx refused\n", (unsigned long)x1);
+#endif
 		SMC_RET1(handle, SMC_UNK);
 #endif
 
@@ -221,12 +229,30 @@ static uintptr_t aml_sip_handler(uint32_t smc_fid,
 			SMC_RET1(handle, ret);
 	}
 #endif
+#if !PLAT_SMC_TRACE
 		ERROR("BL31: Unhandled SIP SMC: 0x%08x\n", smc_fid);
+#endif
 		break;
 	}
 
 	SMC_RET1(handle, SMC_UNK);
 }
+
+#if PLAT_SMC_TRACE
+/* 调用跟踪（试验构建）：进出各记一次，返回值取交回调用者的 x0 */
+static uintptr_t aml_sip_traced(uint32_t smc_fid,
+				u_register_t x1, u_register_t x2,
+				u_register_t x3, u_register_t x4,
+				void *cookie, void *handle,
+				u_register_t flags)
+{
+	plat_smc_trace(smc_fid, x1, x2, x3, handle, false, 0U);
+	(void)aml_sip_handler(smc_fid, x1, x2, x3, x4, cookie, handle, flags);
+	plat_smc_trace(smc_fid, x1, x2, x3, handle, true,
+		       read_ctx_reg(get_gpregs_ctx(handle), CTX_GPREG_X0));
+	return (uintptr_t)handle;
+}
+#endif
 
 static int32_t aml_sip_setup(void)
 {
@@ -243,5 +269,9 @@ DECLARE_RT_SVC(
 	OEN_SIP_END,
 	SMC_TYPE_FAST,
 	aml_sip_setup,
+#if PLAT_SMC_TRACE
+	aml_sip_traced
+#else
 	aml_sip_handler
+#endif
 );

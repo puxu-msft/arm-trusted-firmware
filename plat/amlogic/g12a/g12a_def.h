@@ -50,6 +50,18 @@
 #define AML_TRIAL_MEMLOG_SIZE			UL(0x00010000)
 
 /*
+ * 试验构建的调用跟踪另把最近一次 SiP/PSCI 调用（CPU_SUSPEND、CPU_OFF 除外）记在 PREG_STICKY_REG1（周边域 0xFF634400 起第 0x71 个字），内存日志过不了复位，它过得了：
+ * [31:18] 调用序号的低 14 位，[17:16] 核号，[15:9] fid[31:25]，[8] 已返回，[7:0] fid[7:0]（SiP 与 PSCI 的 fid[31:24] 是 0x82/0x84/0xC2/0xC4，bit24 恒 0，借来记“已返回”）。
+ * 冷启动时把上一次留下的值记进日志再清零。M12 上机实测（2026-11-25）：主线 u-boot 里写入后经 PSCI SYSTEM_RESET 与 100 ms EE 看门狗各复位一次，读回都是写入值；同样测的 AO_DEBUG_REG3（0xFF8000AC）两种复位后都是 0，不能用。
+ * 不与别人共用：M12 厂商 BL2、BL31、BL33 按 mov/movk 构造的地址里没有它，BL30 没有它的字面量与 movw 构造；厂商 BL2 存了 STICKY_REG0 的地址、厂商 BL33 拿 STICKY_REG2 作线刷标志，在役内核（4.9.113）的 DT 只给 ram-dump 映射 STICKY_REG8，内核二进制里没有它的字面量与 movw/movt 构造，hdmitx 经周边域访问器的常量地址里也没有（非常量地址的调用没能逐一排除）；主线 U-Boot 与本树不碰它。
+ * 例外：厂商 BL33 的 DDR 测试命令以 STICKY_REG0 为基址加偏移写 REG1 起的几个（同族源码 cmd_ddr_test_g12.c；厂商 BL33 里每颗芯片一张带 0xFF6345C0 的表，0x11030cc），mov/movk 的扫描看不到这种写法；只在手动执行这些命令时才写，开机路径不碰。
+ */
+#define AML_TRIAL_SMC_MARK_REG			UL(0xFF6345C4)
+#define AML_TRIAL_SMC_MARK(seq, core, fid, done)				\
+	((((seq) & 0x3FFFU) << 18) | (((core) & 0x3U) << 16) |			\
+	 (((fid) >> 16) & 0xFE00U) | ((done) ? 0x100U : 0U) | ((fid) & 0xFFU))
+
+/*
  * EE 看门狗（试验构建用来兜住 BL31 与 BL33 早期的挂死）：寄存器同主线 U-Boot 与 Linux 的 meson_gxbb_wdt；1 ms 时基的 CTRL 值（24 MHz 晶振 / 0x5DC0，CLKDIV_EN、CLK_EN、EE_RESET）与武装顺序同 M12 主线 U-Boot 环境的硬截止（patches/u-boot/m12.env 的 m12_console_deadline：先写不带 EN 的 CTRL、TCNT、清计数，最后置 EN），TCNT 以毫秒计、最大 0xFFFF。
  */
 #define AML_WDT_CTRL				UL(0xFFD0F0D0)

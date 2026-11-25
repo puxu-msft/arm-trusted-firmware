@@ -1014,6 +1014,8 @@ Common build options
 
 -  ``PSCI_NS_EP_FOLLOWS_CALLER``：布尔开关。非安全世界的 CPU_ON、CPU_SUSPEND（掉电态）、SYSTEM_SUSPEND 的调用者在 AArch32 时，目标核按调用者的执行态与模式进入（SVC；调用者在 Hyp 时进 Hyp），不按 SCR_EL3 推断。用于 EL2 已实现但不用、AArch64 引导程序之下 AArch32 内核跑在 SVC 的系统。要同时开 ``INIT_UNUSED_NS_EL2=1``。缺省为 0。
 
+-  ``PLAT_SMC_TRACE``：布尔开关。标准服务把调用交给 PSCI 之前与 PSCI 返回之后各调一次平台提供的 ``plat_smc_trace()``（不返回的调用如 CPU_OFF、SYSTEM_RESET 只有进入的一次），平台可以在自己的 SiP 分发里同样调用，用来在调试构建里记录调用序列。开启时平台必须提供这个函数。缺省为 0。
+
 -  ``ARCH_FEATURE_AVAILABILITY``: Boolean flag to enable support for the
    optional SMCCC_ARCH_FEATURE_AVAILABILITY call. This option implicitly
    interacts with IMPDEF_SYSREG_TRAP and software emulation. This option

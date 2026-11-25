@@ -14,6 +14,7 @@
 #include <lib/pmf/pmf.h>
 #include <lib/psci/psci.h>
 #include <lib/runtime_instr.h>
+#include <plat/common/platform.h>
 #include <services/drtm_svc.h>
 #include <services/errata_abi_svc.h>
 #include <services/firme_svc.h>
@@ -147,8 +148,14 @@ static uintptr_t std_svc_smc_handler(uint32_t smc_fid,
 		    get_cpu_data(cpu_data_pmf_ts[CPU_DATA_PMF_TS0_IDX]));
 #endif
 
+#if PLAT_SMC_TRACE
+		plat_smc_trace(smc_fid, x1, x2, x3, handle, false, 0U);
+#endif
 		ret = psci_smc_handler(smc_fid, x1, x2, x3, x4,
 		    cookie, handle, flags);
+#if PLAT_SMC_TRACE
+		plat_smc_trace(smc_fid, x1, x2, x3, handle, true, ret);
+#endif
 
 #if ENABLE_RUNTIME_INSTRUMENTATION
 		PMF_CAPTURE_TIMESTAMP(rt_instr_svc,

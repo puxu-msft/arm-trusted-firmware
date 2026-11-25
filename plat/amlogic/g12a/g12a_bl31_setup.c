@@ -46,6 +46,15 @@ static void aml_trial_wdt_arm(void)
 	mmio_write_32(AML_WDT_CTRL, AML_WDT_CTRL_1MS | AML_WDT_CTRL_EN);
 }
 
+/* 只写进内存日志（不经 UART）：调用跟踪用（aml_smc_trace.c） */
+void aml_trial_memlog_puts(const char *s)
+{
+	while (*s != '\0') {
+		(void)aml_trial_memlog.console.putc((unsigned char)*s, &aml_trial_memlog.console);
+		s++;
+	}
+}
+
 static void aml_trial_memlog_init(void)
 {
 	/* MMU 还没开：直接写进 DRAM。正文长写进头里，驱动注册时读一次、此后只信安全侧的副本 */
@@ -110,8 +119,13 @@ void bl31_early_platform_setup2(u_register_t arg0, u_register_t arg1,
 	struct g12a_bl31_param *from_bl2;
 
 #if AML_TRIAL
+	uint32_t smc_mark;
+
 	aml_trial_wdt_arm();
 	aml_trial_memlog_init();
+	/* 上一次（复位之前）留下的最近一次调用，记下后清零 */
+	smc_mark = mmio_read_32(AML_TRIAL_SMC_MARK_REG);
+	mmio_write_32(AML_TRIAL_SMC_MARK_REG, 0U);
 #endif
 
 	/* Initialize the console to provide early debug support */
@@ -122,6 +136,7 @@ void bl31_early_platform_setup2(u_register_t arg0, u_register_t arg1,
 	       aml_trial_marker, (unsigned int)AML_TRIAL_WDT_MS,
 	       (unsigned long)AML_TRIAL_MEMLOG_BASE,
 	       (unsigned long)AML_TRIAL_MEMLOG_SIZE);
+	NOTICE("BL31: previous SMC mark 0x%08x (PREG_STICKY_REG1, cleared)\n", smc_mark);
 #endif
 
 	from_bl2 = (struct g12a_bl31_param *)arg0;
