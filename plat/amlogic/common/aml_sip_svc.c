@@ -6,11 +6,11 @@
 
 #include <common/debug.h>
 #include <common/runtime_svc.h>
+#include <context.h>
+#include <lib/el3_runtime/context_mgmt.h>
 #include <lib/mmio.h>
 #include <platform_def.h>
 #if PLAT_SMC_TRACE
-#include <context.h>
-#include <lib/el3_runtime/context_mgmt.h>
 #include <plat/common/platform.h>
 #endif
 #include <stdbool.h>
@@ -57,22 +57,30 @@ static int aml_sip_get_chip_id(uint64_t version)
 }
 
 #if defined(AML_SIP_VENDOR_SMALL) && AML_SIP_VENDOR_SMALL
+/*
+ * 调用者模式下的返回地址（DMC 代理的越界记录用来分辨调用者；ELR_EL3 只是发 smc 那条指令的下一条，内核都经同一个 __arm_smccc_smc 发）：
+ * AArch64 取 X30；AArch32 按模式取分组的 LR 在 AArch64 寄存器里的位置（Arm ARM 的 AArch32 寄存器映射）：usr、sys、hyp → X14，irq → X16，svc → X18，abt → X20，und → X22，fiq → X30。
+ */
+static u_register_t aml_caller_lr(cpu_context_t *ctx, u_register_t spsr)
+{
+	gp_regs_t *gp = get_gpregs_ctx(ctx);
+
+	if (((spsr >> MODE_RW_SHIFT) & MODE_RW_MASK) != MODE_RW_32)
+		return read_ctx_reg(gp, CTX_GPREG_LR);
+	switch (spsr & MODE32_MASK) {
+	case MODE32_irq:	return read_ctx_reg(gp, CTX_GPREG_X16);
+	case MODE32_svc:	return read_ctx_reg(gp, CTX_GPREG_X18);
+	case MODE32_abt:	return read_ctx_reg(gp, CTX_GPREG_X20);
+	case MODE32_und:	return read_ctx_reg(gp, CTX_GPREG_X22);
+	case MODE32_fiq:	return read_ctx_reg(gp, CTX_GPREG_LR);
+	default:		return read_ctx_reg(gp, CTX_GPREG_X14);
+	}
+}
+
 /* AO_RTI_STATUS_REG3 的一个字段换成 val（读改写） */
 static void aml_ao_reg3_set(uint32_t mask, uint32_t val)
 {
 	mmio_clrsetbits_32(AML_AO_RTI_STATUS_REG3, mask, val & mask);
-}
-
-/* DMC 安全寄存器的读写代理（g12a_def.h 的 0x8200004A）：只代理 AML_DMC_SEC_BASE 那一页，页外与 rw 不是 0、1 时回 0 */
-static u_register_t aml_dmc_rw(u_register_t addr, u_register_t val, u_register_t rw)
-{
-	if ((addr < AML_DMC_SEC_BASE) || (addr >= AML_DMC_SEC_BASE + AML_DMC_SEC_SIZE) ||
-	    ((addr & 3U) != 0U) || (rw > 1U))
-		return 0;
-	if (rw == 0U)
-		return mmio_read_32(addr);
-	mmio_write_32(addr, (uint32_t)val);
-	return 0;
 }
 
 /* SET_USB_BOOT 的模式 1–4（CLEAR、FORCE、RUN_COMD、PANIC_DUMP）到 AO_RTI_STATUS_REG3[15:12] 的值，与厂商跳转表 0x5128048 相同 */
@@ -157,7 +165,21 @@ static uintptr_t aml_sip_handler(uint32_t smc_fid,
 		SMC_RET1(handle, 0);
 
 	case AML_SM_DMC_RW:
-		SMC_RET1(handle, aml_dmc_rw(x1, x2, x3));
+	{
+		cpu_context_t *ctx = (cpu_context_t *)handle;
+		u_register_t spsr = read_ctx_reg(get_el3state_ctx(ctx), CTX_SPSR_EL3);
+
+		SMC_RET1(handle, aml_dmc_proxy_rw(x1, x2, x3, spsr, aml_caller_lr(ctx, spsr),
+						  read_ctx_reg(get_el3state_ctx(ctx), CTX_ELR_EL3)));
+	}
+
+	case AML_SM_DMC_PROXY_LOG:
+	{
+		uint32_t r[4];
+
+		aml_dmc_proxy_log_read(x1, r);
+		SMC_RET4(handle, r[0], r[1], r[2], r[3]);
+	}
 
 	case AML_SM_SET_REBOOT_REASON:
 		/* 厂商把 x1 整个或进 REG3（0x5119ea4）；这里只取 [3:0]，越界的高位不写进别的字段 */

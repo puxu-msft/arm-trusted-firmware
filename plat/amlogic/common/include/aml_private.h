@@ -44,6 +44,11 @@ uint64_t aml_efuse_user_max(void);
 /* 试验构建（AML_TRIAL）：只写进内存日志的字符串 */
 void aml_trial_memlog_puts(const char *s);
 
+/* DMC 安全寄存器的读写代理与它拒绝的请求的记录（aml_dmc_proxy.c）；spsr、elr 是调用者保存的 SPSR_EL3、ELR_EL3，lr 是调用者模式下的返回地址 */
+u_register_t aml_dmc_proxy_rw(u_register_t addr, u_register_t val, u_register_t rw,
+			      u_register_t spsr, u_register_t lr, u_register_t elr);
+void aml_dmc_proxy_log_read(u_register_t index, uint32_t out[4]);
+
 /* HDMITX 安全寄存器（aml_hdmitx.c；地址按内核 hdmitx 的编码） */
 uint32_t aml_hdmitx_sec_read(uint32_t reg);
 void aml_hdmitx_sec_write(uint32_t reg, uint32_t val);

@@ -83,7 +83,8 @@ AML_SIP_VENDOR_SMALL		:= 1
 $(eval $(call assert_boolean,AML_SIP_VENDOR_SMALL))
 $(eval $(call add_define,AML_SIP_VENDOR_SMALL))
 ifeq (${AML_SIP_VENDOR_SMALL},1)
-BL31_SOURCES		+=	${AML_PLAT_COMMON}/aml_hdmitx.c
+BL31_SOURCES		+=	${AML_PLAT_COMMON}/aml_dmc_proxy.c		\
+				${AML_PLAT_COMMON}/aml_hdmitx.c
 endif
 
 # 安全存储（unifykey）：现役 Android 9 的内核在运行期直接发存储类 SMC，表由引导程序装好（plat/amlogic/common/aml_sstore*.c，M12 docs/19 §6）

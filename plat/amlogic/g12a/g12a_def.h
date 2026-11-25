@@ -209,7 +209,7 @@
  * - 0x82000031：eFuse 写，不提供，一律回 0（写了 0 字节）。厂商 BL33 的 eFuse 封装 0x1002300 对类型 1 只看返回值是否为 0（0x1002400：0 报失败、非 0 报成功），回 SMC_UNK 会让 efuse 写命令误报成功；内核的 eFuse 写在 M12 上不可达（DT 的 efuse 节点 disabled）；
  * - 0x82000046：TEST_N 的输出使能（厂商 0x5119570）：x1 = 1 时置 AO_GPIO_TEST_N（0xFF800140）bit0，x1 = 0 时清，其余不改，回 0；内核 meson_g12a_aobus_init 开机发一次 0x82000046(1)；
  * - 0x82000049：设重启原因，AO_RTI_STATUS_REG3[3:0]（厂商 0x5119e94）；
- * - 0x8200004A：DMC 安全寄存器的读写代理（厂商 0x5119f70）：x1 地址、x2 值、x3 = 0 读（回读到的 32 位）、1 写（回 0），x3 其余值回 0。厂商不查地址；这里只代理内核 dmc_monitor 用到的那一页（DT 的 reg_base 0xFF639000 起 0x400 字节、4 字节对齐），页外读回 0、写不做——照厂商不查地址，非安全世界就能经它读写 BL31 自己的内存（E 在那里，与“不把 E 交给非安全世界”冲突），页表外的地址还会让 EL3 取址异常。内核 dmc_monitor 每秒读、写一次 DMC_SEC_STATUS（0xFF6392E0），回 SMC_UNK 时每次都在 EL3 打一行错误日志；
+ * - 0x8200004A：DMC 安全寄存器的读写代理（厂商 0x5119f70）：x1 地址、x2 值、x3 = 0 读（回读到的 32 位）、1 写（回 0），x3 其余值回 0。厂商不查地址；这里只代理内核 dmc_monitor 用到的那一页（DT 的 reg_base 0xFF639000 起 0x400 字节、4 字节对齐），页外读回 0、写不做——照厂商不查地址，非安全世界就能经它读写 BL31 自己的内存（E 在那里，与“不把 E 交给非安全世界”冲突），页表外的地址还会让 EL3 取址异常（范围由用户 2026-11-26 定）。内核 dmc_monitor 每秒读、写一次 DMC_SEC_STATUS（0xFF6392E0），回 SMC_UNK 时每次都在 EL3 打一行错误日志。因地址拒绝的请求记下来源（地址、读写、调用者的 SPSR[4:0] 与调用者模式下的 LR、次数，AML_DMC_PROXY_LOG_SLOTS 条的环形记录），作将来是否放宽的依据：本分支私有的 0x820000F0 读出，格式见 aml_dmc_proxy.c；
  * - 0x820000FF：AML_DATA_PROCESS，只认类型 0x40 与 0x100、不做事、回 0（厂商 bootm 的 aml_sec_boot_check 发 0x40，回非 0 就中止引导），别的类型（eFuse 写、口令等）一律回 SMC_UNK。
  */
 #define AML_SM_HDMITX_SEC_READ			U(0x82000018)
@@ -220,6 +220,8 @@
 #define AML_SM_EFUSE_WRITE			U(0x82000031)
 #define AML_SM_TEST_N_OUTPUT			U(0x82000046)
 #define AML_SM_DMC_RW				U(0x8200004A)
+#define AML_SM_DMC_PROXY_LOG			U(0x820000F0)	/* 本分支私有，厂商没有 */
+#define AML_DMC_PROXY_LOG_SLOTS			U(8)
 #define AML_SM_SET_REBOOT_REASON		U(0x82000049)
 #define AML_SM_DATA_PROCESS			U(0x820000FF)
 
