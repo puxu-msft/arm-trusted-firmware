@@ -81,14 +81,17 @@ uint32_t aml_scpi_sys_power_state(uint64_t system_state)
 {
 	uint32_t *response;
 	size_t size;
+	uint32_t ret;
 
 	aml_mhu_secure_message_start();
 	mmio_write_8(AML_MHU_SECURE_AP_TO_SCP_PAYLOAD, system_state);
 	aml_mhu_secure_message_send(aml_scpi_cmd(SCPI_CMD_SET_SYS_POWER_STATE, 1));
 	aml_scpi_secure_message_receive((void *)&response, &size);
+	/* 同 aml_scpi_efuse_read()：在放开邮箱锁之前读应答 */
+	ret = *response;
 	aml_mhu_secure_message_end();
 
-	return *response;
+	return ret;
 }
 
 void aml_scpi_jtag_set_state(uint32_t state, uint8_t select)
@@ -108,10 +111,14 @@ void aml_scpi_jtag_set_state(uint32_t state, uint8_t select)
 	aml_mhu_secure_message_end();
 }
 
+/*
+ * 应答在 SCP→AP 的邮箱共享区里，要在 aml_mhu_secure_message_end() 放开邮箱锁之前读完：放开之后别的核的下一条消息的应答会覆盖它（厂商 g12a BL31 0x5118db0 同样在锁内拷贝）。拷贝长度按请求截断：长度字段来自 SCP，不让它写过调用者的缓冲。
+ */
 uint32_t aml_scpi_efuse_read(void *dst, uint32_t base, uint32_t size)
 {
 	uint32_t *response;
 	size_t resp_size;
+	uint32_t n;
 
 	if (size > 0x1FC)
 		return 0;
@@ -121,16 +128,19 @@ uint32_t aml_scpi_efuse_read(void *dst, uint32_t base, uint32_t size)
 	mmio_write_32(AML_MHU_SECURE_AP_TO_SCP_PAYLOAD + 4, size);
 	aml_mhu_secure_message_send(aml_scpi_cmd(SCPI_CMD_EFUSE_READ, 8));
 	aml_scpi_secure_message_receive((void *)&response, &resp_size);
-	aml_mhu_secure_message_end();
 
 	/*
 	 * response[0] is the size of the response message.
 	 * response[1 ... N] are the contents.
 	 */
-	if (*response != 0)
-		memcpy(dst, response + 1, *response);
+	n = *response;
+	if (n > size)
+		n = size;
+	if (n != 0)
+		memcpy(dst, response + 1, n);
+	aml_mhu_secure_message_end();
 
-	return *response;
+	return n;
 }
 
 void aml_scpi_unknown_thermal(uint32_t arg0, uint32_t arg1,
@@ -157,13 +167,16 @@ uint32_t aml_scpi_get_chip_id(uint8_t *obuff, uint32_t osize)
 	aml_mhu_secure_message_start();
 	aml_mhu_secure_message_send(aml_scpi_cmd(SCPI_CMD_CHIP_ID, osize));
 	aml_scpi_secure_message_receive((void *)&response, &resp_size);
-	aml_mhu_secure_message_end();
 
+	/* 同 aml_scpi_efuse_read()：在放开邮箱锁之前拷出应答 */
 	if (!((resp_size == 16) && (osize == 16)) &&
-	    !((resp_size == 0) && (osize == 12)))
+	    !((resp_size == 0) && (osize == 12))) {
+		aml_mhu_secure_message_end();
 		return 0;
+	}
 
 	memcpy((void *)obuff, (const void *)response, osize);
+	aml_mhu_secure_message_end();
 
 	return osize;
 }
