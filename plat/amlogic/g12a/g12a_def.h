@@ -29,6 +29,10 @@
 #define AML_SEC_SHARE_MEM_BASE			UL(0x05200000)
 #define AML_SEC_SHARE_MEM_SIZE			UL(0x00100000)
 
+/* 整机挂起时 BL30 取 SHA 的范围（厂商 BL2 写进 AO_SEC_GP_CFG5 与 CFG3[31:16] << 10，0xfffab00c–0xfffab01c 的参数）：非安全共享区、BL31 与安全共享区 */
+#define AML_BL30_SHA_BASE			UL(0x05000000)
+#define AML_BL30_SHA_SIZE			UL(0x00300000)
+
 #define AML_GIC_DEVICE_BASE			UL(0xFFC00000)
 #define AML_GIC_DEVICE_SIZE			UL(0x00008000)
 

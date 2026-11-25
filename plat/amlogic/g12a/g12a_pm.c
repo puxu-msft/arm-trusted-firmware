@@ -6,11 +6,13 @@
 
 #include <arch_helpers.h>
 #include <assert.h>
+#include <common/bl_common.h>
 #include <common/debug.h>
 #include <drivers/arm/gicv2.h>
 #include <drivers/console.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <lib/cassert.h>
 #include <lib/el3_runtime/context_mgmt.h>
 #include <lib/mmio.h>
 #include <lib/psci/psci.h>
@@ -60,6 +62,10 @@ SUBSCRIBE_TO_EVENT(psci_cpu_on_finish, g12a_trial_on_done);
 #ifndef AML_PSCI_SYSTEM_SUSPEND
 #define AML_PSCI_SYSTEM_SUSPEND	0
 #endif
+
+/* 整机挂起前刷到 PoC 的两段（非安全共享区到 BL31 末尾、安全共享区）要落在 BL30 取 SHA 的范围里、并覆盖到它的末尾 */
+CASSERT((AML_SEC_SHARE_MEM_BASE + AML_SEC_SHARE_MEM_SIZE == AML_BL30_SHA_BASE + AML_BL30_SHA_SIZE) &&
+	(AML_NS_SHARE_MEM_BASE == AML_BL30_SHA_BASE), assert_aml_bl30_sha_range);
 #if AML_PSCI_SYSTEM_SUSPEND && !(AML_PSCI_CPU_SUSPEND && defined(PLATFORM_SYSTEM_COUNT))
 #error "AML_PSCI_SYSTEM_SUSPEND needs AML_PSCI_CPU_SUSPEND and a system power level"
 #endif
@@ -402,6 +408,24 @@ static void __dead2 g12a_pwr_domain_pwr_down_wfi(const psci_power_state_t
 	 * 掉电挂起：邮箱 +8 写 0 后在 WFI 里等 SCP 断电，不回卷（厂商 0x5119910 与 0x51272e0 同样不回卷：SCP 已收到关核命令，醒来接着跑会与它断电相撞）。偶发唤醒就再 WFI。
 	 */
 	if (g12a_cpu_suspending[core] != 0U) {
+#if AML_PSCI_SYSTEM_SUSPEND && defined(PLATFORM_SYSTEM_COUNT)
+		/*
+		 * 整机挂起：SCP 在关簇之前对 [AML_BL30_SHA_BASE, +AML_BL30_SHA_SIZE) 取 SHA，醒来重算，不一致就看门狗复位（厂商 BL30 0x10005218 → 0x10004b6c、0x10005284 → 0x10004bcc；范围是厂商 BL2 写进 AO_SEC_GP_CFG5、CFG3 的 0x05000000 起 3 MiB）。
+		 * HW_ASSISTED_COHERENCY 下 PSCI 不刷数据缓存，BL31 与共享区的脏行要到关簇时才写回 DDR，晚于取 SHA；所以在把 +8 写 0（SCP 等到它才关核、之后才取 SHA）之前把这一段刷到 PoC，之后只剩写邮箱与 WFI，不再碰 DDR。厂商在 PSCI 通用的下电前维护里刷当前的栈（0x5122950 → 0x512723c，早于平台 suspend），其余运行期数据按非缓存放。
+		 * BL31_END 起到 0x05200000 是 BL31 之后的空档（EL3 里按非安全映射，BL31 不写、内核写不进），不刷。另一段 BL32 区（AO_SEC_GP_CFG4 起 CFG3[15:0] << 10）只在两者都非 0 时才取 SHA，本平台没有 BL32，预期为 0。
+		 */
+		if (target_state->pwr_domain_state[MPIDR_AFFLVL2] == PLAT_LOCAL_STATE_OFF) {
+			/* 邮箱地址先算好：刷完之后不再调函数（调用会压栈，栈在这一段里） */
+			uintptr_t mailbox8 = AML_PSCI_MAILBOX_BASE + ((uintptr_t)core << 4) + 8U;
+
+			flush_dcache_range(AML_BL30_SHA_BASE, BL31_END - AML_BL30_SHA_BASE);
+			flush_dcache_range(AML_SEC_SHARE_MEM_BASE, AML_SEC_SHARE_MEM_SIZE);
+			mmio_write_32(mailbox8, 0);
+			dsbsy();
+			for (;;)
+				wfi();
+		}
+#endif
 		g12a_pm_reset(mpidr);
 		dsbsy();
 		for (;;)
