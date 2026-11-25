@@ -202,7 +202,7 @@
 
 /*
  * 厂商 g12a BL31 的 SiP 里，现役 Android 9（厂商 4.9 内核与厂商 BL33）要用、又不涉及安全存储的几个（调用方盘点与 M12 docs/19 §9 的复查；eFuse 写只回 0、不写；PLAT=sm1 打开 AML_SIP_VENDOR_SMALL）：
- * - 0x82000018/19：HDMITX 安全寄存器读、写（厂商 0x511ed20、0x511eda4；地址的编码见 aml_sip_svc.c）；
+ * - 0x82000018/19：HDMITX 安全寄存器读、写（厂商 0x511ed20、0x511eda4；地址的编码见 aml_hdmitx.c）；
  * - 0x82000042：设挂起原因，AO_RTI_STATUS_REG3[11:8] = (x1 == 1)（厂商 0x5119eb8；内核关机前发 0x82000042(1)）；
  * - 0x82000043：SET_USB_BOOT，模式 1、2、3、4 把 AO_RTI_STATUS_REG3[15:12] 写成 0、1、2、8，其余模式不改，一律回 0（厂商 0x5119ee4 与跳转表 0x5128048；厂商 BL33 在 ROM USB 启动时的烧录分支 0x105857c 先发 0x82000043(1)，set_usb_boot 命令 0x1045ad0 也发它；厂商 BL2 0xfffa382c 在 [15:12] = 2 时把启动设备当作 7）；
  * - 0x8200003D：读 eFuse 的校准数据（厂商 0x5118150 → 平台操作表 +0xa8 = 0x511a50c）：x1 是偏移、x2 是长度，按 32 位比较，偏移 ≤ 6、长度 ≤ 7、1 ≤ 偏移 + 长度 ≤ 7 时把整片 eFuse 的字节 [0x11 + 偏移, 0x11 + 偏移 + 长度) 读进输出共享区、回读到的字节数，否则回 0。偏移是整片 eFuse 的字节坐标，与 0x82000030 的用户区坐标不同（那里加 0x1A0，0x511a3dc）；读法同 0x82000030（厂商 0x5118db0：SCPI eFuse 读，回 SCP 给的字节数）。调用方是厂商 BL33 的 eFuse 封装 0x1002300（类型 4）：返回值不为 0 就当字节数从输出共享区拷出（0x10023f4 sxtw 后调 memcpy），回 SMC_UNK 就拷 −1 个字节；开机路径上的 0x106e2d8 → 0x105474c 读偏移 0 起 7 字节、要求回 7；
@@ -285,10 +285,14 @@
  */
 #define AML_SM_HDCP14_KEY_LSTORE		U(0x8200001A)
 #define AML_SM_HDCP22_KEY_LSTORE		U(0x8200001B)
-#define AML_HDCP14_KEY_NAME			"hdcp"
-#define AML_HDCP14_KEY_LEN			U(0x120)
-#define AML_HDCP22_KEY_NAME			"hdcp22_fw_private"
-#define AML_HDCP22_KEY_LEN			U(0x20)
+
+/*
+ * HDCP 操作类调用（AML_HDCP 提供，fid 与实现在 aml_hdcp.h、aml_hdcp.c）：0x82000010–17、0x1C、0x83、0x84、0x8A，照厂商写 HDMITX 安全区的 HDCP 寄存器、维护 HDCP 2.2 结果的去抖状态。
+ * 要紧的是副作用而不是返回值：厂商 BL33 的 hdmitx 初始化在 0x1005650 直接发 0x82000012（HDCP14_INIT），把 MC_CLKDIS、A_HDCPCFG0/1、TOP 0x2A 与 HDCP22REG_CTRL 写成初始化后的值（内核只在 0x8200001A 报 hdcp key 在库时才在 hdmitx_set_dispmode 里再发一次，M12 没有 key 不发）；回 SMC_UNK 时这些寄存器停在复位值（A_HDCPCFG1 = 1、HDCP22REG_CTRL = 0），M12 上 S4b 的 HDMI 输出一片纯绿，经调试接口把它们写成初始化后的值、重设一次显示模式后出图（哪一个寄存器是关键没有分开测）。
+ * TOP 0x2A（HDMITX_TOP_HDCP22_BSOD，0xFF6080A8）只有安全世界写得进：非安全写不生效（S4b 实测），内核的定义带安全位、经 0x82000019 交 BL31 写。
+ * 时基是 ISA_TIMERE（1 µs，厂商 0x511ece0、0x511e8c4 直接读）。
+ */
+#define AML_ISA_TIMERE				UL(0xFFD0F188)
 
 /* SET_STORAGE_INFO 写的 AO 寄存器（[30:28]）；GET_ENCTYPE 读的 ASSIST_HW_REV（厂商拿低字节与 0x23 比，0x23 是 Amlogic 的 TXL 族号） */
 #define AML_SSTORE_INFO_REG			UL(0xFF800248)

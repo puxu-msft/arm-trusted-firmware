@@ -82,6 +82,9 @@ $(eval $(call add_defines, AML_PSCI_CPU_SUSPEND AML_PSCI_SYSTEM_SUSPEND AML_CPU0
 AML_SIP_VENDOR_SMALL		:= 1
 $(eval $(call assert_boolean,AML_SIP_VENDOR_SMALL))
 $(eval $(call add_define,AML_SIP_VENDOR_SMALL))
+ifeq (${AML_SIP_VENDOR_SMALL},1)
+BL31_SOURCES		+=	${AML_PLAT_COMMON}/aml_hdmitx.c
+endif
 
 # 安全存储（unifykey）：现役 Android 9 的内核在运行期直接发存储类 SMC，表由引导程序装好（plat/amlogic/common/aml_sstore*.c，M12 docs/19 §6）
 # AML_SSTORE_WRITE_BACK=0 只给 RAM 试验：WRITE/REMOVE 不把新块交回块缓冲、回 1，内核不落盘
@@ -93,6 +96,18 @@ ifeq (${AML_SSTORE},1)
 BL31_SOURCES		+=	${AML_PLAT_COMMON}/aml_sstore.c			\
 				${AML_PLAT_COMMON}/aml_sstore_crypto.c		\
 				${AML_PLAT_COMMON}/aml_sstore_svc.c
+endif
+
+# HDCP 操作类调用（HDCP14 初始化与开关、HDCP 2.2 结果与 DUK，plat/amlogic/common/aml_hdcp*.c）：寄存器经 HDMITX 安全访问器（AML_SIP_VENDOR_SMALL）；key 从安全存储读、解密用它的 AES，“key 在不在库”的 0x8200001A/1B 也在安全存储里（AML_SSTORE）
+AML_HDCP			:= 1
+$(eval $(call assert_boolean,AML_HDCP))
+$(eval $(call add_define,AML_HDCP))
+ifeq (${AML_HDCP},1)
+ifneq (${AML_SIP_VENDOR_SMALL}${AML_SSTORE},11)
+  $(error AML_HDCP=1 needs AML_SIP_VENDOR_SMALL=1 and AML_SSTORE=1 on ${PLAT}: the HDCP calls write HDMITX secure registers through aml_hdmitx.c and take the keys from the secure storage, which also answers 0x8200001A/1B)
+endif
+BL31_SOURCES		+=	${AML_PLAT_COMMON}/aml_hdcp.c			\
+				${AML_PLAT_COMMON}/aml_hdcp_svc.c
 endif
 
 # 试验辅助（只给 RAM 试验件）：冷启动武装 EE 看门狗、日志另写一份到内存（plat/amlogic/g12a/g12a_bl31_setup.c）

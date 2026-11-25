@@ -23,6 +23,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "aml_hdcp.h"
 #include "aml_private.h"
 #include "aml_sstore.h"
 
@@ -173,6 +174,16 @@ static void log_change(bool is_write, uint32_t ret)
 		NOTICE("sstore: %s '%s' (namelen %u, %u bytes) -> %u, refused before sealing\n", what,
 		       printable ? name : "<binary>", sstore.last_namelen, sstore.last_datalen, ret);
 	}
+}
+
+uint32_t aml_sstore_key_get(const char *name, uint8_t *buf, uint32_t len, uint32_t *attr)
+{
+	uint32_t n;
+
+	spin_lock(&sstore_lock);
+	n = aml_sstore_key_copy(&sstore, name, buf, len, attr);
+	spin_unlock(&sstore_lock);
+	return n;
 }
 
 /* 处理了返回 true，结果在 *ret；不是安全存储的 fid 返回 false */

@@ -44,8 +44,18 @@ uint64_t aml_efuse_user_max(void);
 /* 试验构建（AML_TRIAL）：只写进内存日志的字符串 */
 void aml_trial_memlog_puts(const char *s);
 
+/* HDMITX 安全寄存器（aml_hdmitx.c；地址按内核 hdmitx 的编码） */
+uint32_t aml_hdmitx_sec_read(uint32_t reg);
+void aml_hdmitx_sec_write(uint32_t reg, uint32_t val);
+
+/* HDCP 操作类调用（AML_HDCP） */
+void aml_hdcp_setup(void);
+bool aml_hdcp_sip(uint32_t fid, u_register_t x1, u_register_t *ret);
+
 /* 安全存储（AML_SSTORE） */
 void aml_sstore_setup(void);
 bool aml_sstore_sip(uint32_t fid, u_register_t x1, u_register_t flags, u_register_t *ret);
+/* BL31 内部读一个 key（语义同 aml_sstore_key_copy，在存储锁下） */
+uint32_t aml_sstore_key_get(const char *name, uint8_t *buf, uint32_t len, uint32_t *attr);
 
 #endif /* AML_PRIVATE_H */

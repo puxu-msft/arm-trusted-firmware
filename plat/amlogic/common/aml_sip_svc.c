@@ -23,6 +23,10 @@
 #define AML_SSTORE	0
 #endif
 
+#ifndef AML_HDCP
+#define AML_HDCP	0
+#endif
+
 struct aml_cpu_info {
 	uint32_t version;
 	uint8_t chip_id[16];
@@ -53,55 +57,6 @@ static int aml_sip_get_chip_id(uint64_t version)
 }
 
 #if defined(AML_SIP_VENDOR_SMALL) && AML_SIP_VENDOR_SMALL
-/*
- * HDMITX 安全寄存器的地址编码，与厂商 g12a BL31 相同（0x511ed20–0x511eda0）：bit28 置位时低 24 位是 0xFF600000 起的字节偏移（≤ 0x7E31，按字节访问）；bit28 清零时低 24 位 ≤ 0x365E，落在 [0x2000, 0x365E] 的按字节访问 0xFF608000 + 偏移，其余按 32 位访问 0xFF608000 + 偏移 × 4。其余位不看。越界返回 false。
- */
-static bool aml_hdmitx_sec_addr(uint32_t reg, uintptr_t *addr, bool *byte)
-{
-	uint32_t off = reg & AML_HDMITX_SEC_OFF_MASK;
-
-	if ((reg & AML_HDMITX_SEC_DWC_SEL) != 0U) {
-		if (off > AML_HDMITX_DWC_MAX)
-			return false;
-		*addr = AML_HDMITX_DWC_BASE + off;
-		*byte = true;
-		return true;
-	}
-	if (off > AML_HDMITX_TOP_MAX)
-		return false;
-	if (off >= AML_HDMITX_TOP_BYTE_START) {
-		*addr = AML_HDMITX_TOP_BASE + off;
-		*byte = true;
-	} else {
-		*addr = AML_HDMITX_TOP_BASE + ((uintptr_t)off << 2);
-		*byte = false;
-	}
-	return true;
-}
-
-static uint32_t aml_hdmitx_sec_read(uint32_t reg)
-{
-	uintptr_t addr;
-	bool byte;
-
-	if (!aml_hdmitx_sec_addr(reg, &addr, &byte))
-		return 0xFFFFFFFFU;
-	return byte ? (uint32_t)mmio_read_8(addr) : mmio_read_32(addr);
-}
-
-static void aml_hdmitx_sec_write(uint32_t reg, uint32_t val)
-{
-	uintptr_t addr;
-	bool byte;
-
-	if (!aml_hdmitx_sec_addr(reg, &addr, &byte))
-		return;
-	if (byte)
-		mmio_write_8(addr, (uint8_t)val);
-	else
-		mmio_write_32(addr, val);
-}
-
 /* AO_RTI_STATUS_REG3 的一个字段换成 val（读改写） */
 static void aml_ao_reg3_set(uint32_t mask, uint32_t val)
 {
@@ -221,6 +176,14 @@ static uintptr_t aml_sip_handler(uint32_t smc_fid,
 #endif
 
 	default:
+#if AML_HDCP
+	{
+		u_register_t ret;
+
+		if (aml_hdcp_sip(smc_fid, x1, &ret))
+			SMC_RET1(handle, ret);
+	}
+#endif
 #if AML_SSTORE
 	{
 		u_register_t ret;
@@ -256,6 +219,9 @@ static uintptr_t aml_sip_traced(uint32_t smc_fid,
 
 static int32_t aml_sip_setup(void)
 {
+#if AML_HDCP
+	aml_hdcp_setup();
+#endif
 #if AML_SSTORE
 	aml_sstore_setup();
 #endif
