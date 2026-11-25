@@ -106,6 +106,21 @@ endfunc plat_crash_console_flush
 	 * ---------------------------------------------
 	 */
 func plat_reset_handler
+#if defined(AML_TRIAL) && AML_TRIAL
+	/* 试验构建：本核的暖启动进度记成第 1 步、进入次数加 1（g12a_def.h 的 AML_TRIAL_WARM_STAGE_REG）。MMU 还没开，直接写寄存器；用 x0–x3、x17（x30 经 x17 保存、恢复） */
+	mov	x17, x30
+	mrs	x0, mpidr_el1
+	bl	plat_calc_core_pos
+	mov	x30, x17
+	mov_imm	x1, AML_TRIAL_WARM_STAGE_BASE
+	add	x1, x1, x0, lsl #2
+	ldr	w2, [x1]
+	ubfx	w3, w2, #16, #8
+	add	w3, w3, #1
+	ubfiz	w3, w3, #16, #8
+	orr	w3, w3, #AML_TRIAL_WARM_RESET
+	str	w3, [x1]
+#endif
 	ret
 endfunc plat_reset_handler
 

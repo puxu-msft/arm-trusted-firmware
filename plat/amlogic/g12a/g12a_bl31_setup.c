@@ -119,13 +119,22 @@ void bl31_early_platform_setup2(u_register_t arg0, u_register_t arg1,
 	struct g12a_bl31_param *from_bl2;
 
 #if AML_TRIAL
-	uint32_t smc_mark;
+	uint32_t smc_mark, warm[4], warm_pc, warm_spsr;
+	unsigned int i;
 
 	aml_trial_wdt_arm();
 	aml_trial_memlog_init();
-	/* 上一次（复位之前）留下的最近一次调用，记下后清零 */
+	/* 上一次（复位之前）留下的最近一次调用与各核的暖启动进度，记下后清零（核 0 的进度这时已被本次冷启动的复位入口改过） */
 	smc_mark = mmio_read_32(AML_TRIAL_SMC_MARK_REG);
 	mmio_write_32(AML_TRIAL_SMC_MARK_REG, 0U);
+	for (i = 0U; i < 4U; i++) {
+		warm[i] = mmio_read_32(AML_TRIAL_WARM_STAGE_REG(i));
+		mmio_write_32(AML_TRIAL_WARM_STAGE_REG(i), 0U);
+	}
+	warm_pc = mmio_read_32(AML_TRIAL_WARM_PC_REG);
+	warm_spsr = mmio_read_32(AML_TRIAL_WARM_SPSR_REG);
+	mmio_write_32(AML_TRIAL_WARM_PC_REG, 0U);
+	mmio_write_32(AML_TRIAL_WARM_SPSR_REG, 0U);
 #endif
 
 	/* Initialize the console to provide early debug support */
@@ -137,6 +146,8 @@ void bl31_early_platform_setup2(u_register_t arg0, u_register_t arg1,
 	       (unsigned long)AML_TRIAL_MEMLOG_BASE,
 	       (unsigned long)AML_TRIAL_MEMLOG_SIZE);
 	NOTICE("BL31: previous SMC mark 0x%08x (PREG_STICKY_REG1, cleared)\n", smc_mark);
+	NOTICE("BL31: previous warm marks %08x %08x %08x %08x pc 0x%08x spsr 0x%08x (PREG_STICKY_REG3-7/9, cleared)\n",
+	       warm[0], warm[1], warm[2], warm[3], warm_pc, warm_spsr);
 #endif
 
 	from_bl2 = (struct g12a_bl31_param *)arg0;

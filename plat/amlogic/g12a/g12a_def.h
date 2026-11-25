@@ -62,6 +62,21 @@
 	 (((fid) >> 16) & 0xFE00U) | ((done) ? 0x100U : 0U) | ((fid) & 0xFFU))
 
 /*
+ * 试验构建的暖启动进度：内核跑着时也能经寄存器读出各核在暖启动里走到哪一步（内存日志在 Android 里读不了）。每核一个寄存器（核 0–3 依次是 PREG_STICKY_REG3–REG6）：
+ * [7:0] 最后走到的一步，[23:16] 从复位入口进来的次数（低 8 位），[31:24] PSCI 交给它的入口属性（entry_point_info 的 h.attr 低 8 位，第 3 步写）；最后一个走到第 3 步的核把非安全入口的地址与 SPSR 写进 REG7 与 REG9。
+ * 步：1 进了 plat_reset_handler（冷启动、CPU_ON 与掉电挂起后的暖启动都经过它，MMU 还没开），2 pwr_domain_on_finish，3 PSCI 的 CPU_ON 收尾做完（psci_cpu_on_finish 事件，之后只剩建上下文与 eret），4 pwr_domain_suspend_finish。冷启动时把上一次的值记进日志再清零。
+ * 不与别人共用：M12 厂商 BL2、BL31、BL33 按 mov/movk 构造的周边域 sticky 地址只有 REG0、REG2、REG8，BL30 没有这几个地址的字面量，在役内核（4.9.113）的 DT 只给 ram-dump 映射 REG8，内核二进制里没有它们的字面量与 movw/movt 构造，hdmitx 经周边域访问器的常量地址里也没有。例外同 PREG_STICKY_REG1：厂商 BL33 的 DDR 测试命令（手动执行时）以 REG0 为基址加偏移写 REG1 起的几个。
+ */
+#define AML_TRIAL_WARM_STAGE_BASE		UL(0xFF6345CC)
+#define AML_TRIAL_WARM_STAGE_REG(core)		(AML_TRIAL_WARM_STAGE_BASE + ((core) << 2))
+#define AML_TRIAL_WARM_PC_REG			UL(0xFF6345DC)
+#define AML_TRIAL_WARM_SPSR_REG			UL(0xFF6345E4)
+#define AML_TRIAL_WARM_RESET			U(1)
+#define AML_TRIAL_WARM_ON_FINISH		U(2)
+#define AML_TRIAL_WARM_ON_DONE			U(3)
+#define AML_TRIAL_WARM_SUSPEND_FINISH		U(4)
+
+/*
  * EE 看门狗（试验构建用来兜住 BL31 与 BL33 早期的挂死）：寄存器同主线 U-Boot 与 Linux 的 meson_gxbb_wdt；1 ms 时基的 CTRL 值（24 MHz 晶振 / 0x5DC0，CLKDIV_EN、CLK_EN、EE_RESET）与武装顺序同 M12 主线 U-Boot 环境的硬截止（patches/u-boot/m12.env 的 m12_console_deadline：先写不带 EN 的 CTRL、TCNT、清计数，最后置 EN），TCNT 以毫秒计、最大 0xFFFF。
  */
 #define AML_WDT_CTRL				UL(0xFFD0F0D0)

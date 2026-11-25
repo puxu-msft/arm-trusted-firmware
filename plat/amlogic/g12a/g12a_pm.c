@@ -19,6 +19,31 @@
 
 #include "aml_private.h"
 
+#if defined(AML_TRIAL) && AML_TRIAL
+#include <lib/el3_runtime/cpu_data.h>
+#include <lib/el3_runtime/pubsub_events.h>
+
+/* 试验构建的暖启动进度（g12a_def.h 的 AML_TRIAL_WARM_STAGE_REG）：本核走到的一步换成 stage，进入次数与入口属性不动 */
+static void g12a_trial_warm_stage(unsigned int stage)
+{
+	mmio_clrsetbits_32(AML_TRIAL_WARM_STAGE_REG(plat_my_core_pos()), 0xFFU, stage);
+}
+
+/* PSCI 的 CPU_ON 收尾做完（psci_cpu_on_finish 事件；之后只剩按 warmboot_ep_info 建上下文与 eret）：记第 3 步与入口属性，入口地址与 SPSR 写进 REG7、REG9 */
+static void *g12a_trial_on_done(const void *arg)
+{
+	const entry_point_info_t *ep = get_cpu_data(warmboot_ep_info);
+
+	(void)arg;
+	mmio_clrsetbits_32(AML_TRIAL_WARM_STAGE_REG(plat_my_core_pos()), 0xFF0000FFU,
+			   ((ep->h.attr & 0xFFU) << 24) | AML_TRIAL_WARM_ON_DONE);
+	mmio_write_32(AML_TRIAL_WARM_PC_REG, (uint32_t)ep->pc);
+	mmio_write_32(AML_TRIAL_WARM_SPSR_REG, (uint32_t)ep->spsr);
+	return NULL;
+}
+SUBSCRIBE_TO_EVENT(psci_cpu_on_finish, g12a_trial_on_done);
+#endif
+
 #define SCPI_POWER_ON		0
 #define SCPI_POWER_RETENTION	1
 #define SCPI_POWER_OFF		3
@@ -206,6 +231,9 @@ static void g12a_pwr_domain_on_finish(const psci_power_state_t *target_state)
 
 	assert(target_state->pwr_domain_state[MPIDR_AFFLVL0] ==
 					PLAT_LOCAL_STATE_OFF);
+#if defined(AML_TRIAL) && AML_TRIAL
+	g12a_trial_warm_stage(AML_TRIAL_WARM_ON_FINISH);
+#endif
 
 	if (core == AML_PRIMARY_CPU) {
 		g12a_cpu0_go = 0;
@@ -335,6 +363,9 @@ static void g12a_pwr_domain_suspend_finish(const psci_power_state_t *target_stat
 	mmio_clrbits_32(AML_AO_SEC_GP_CFG7,
 			U(1) << (AML_AO_SEC_GP_CFG7_CPU_SHIFT + core));
 	g12a_cpu_suspending[core] = 0U;
+#if defined(AML_TRIAL) && AML_TRIAL
+	g12a_trial_warm_stage(AML_TRIAL_WARM_SUSPEND_FINISH);
+#endif
 #ifdef PLATFORM_SYSTEM_COUNT
 	if (target_state->pwr_domain_state[MPIDR_AFFLVL2] ==
 	    PLAT_LOCAL_STATE_OFF) {
