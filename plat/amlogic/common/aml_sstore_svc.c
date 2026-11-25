@@ -10,6 +10,7 @@
  * - 存储类调用、块大小与 SET_STORAGE_INFO 在同一把锁下串行（取址只回常量，不加锁）；锁在安全内存里（厂商把锁放在非安全的消息区 +0，非安全世界能占住它）。
  * - 密钥材料：E（eFuse 字节 [4,16)）经 SCP 读一次后存在安全内存里，之后不再读；它与 eFuse[0x40,0x48)、AES 轮密钥都不出 EL3，日志里只记名字、长度、结局与新块块头的 SHA-256 前 8 字节，不记 key 的值。
  * - AML_SSTORE_WRITE_BACK=0（RAM 试验用）：WRITE/REMOVE 只改表、在安全侧写块并自检，块缓冲不动、回 1，内核因此不把块写回 eMMC。
+ * - AML_SSTORE_SKIP_UNCHANGED=1：值与属性都没变的 WRITE 什么都不改、回 AML_SSTORE_UNCHANGED（4），厂商内核因此不落盘（M12 docs/19 §6.4 末）。
  */
 
 #include <common/debug.h>
@@ -29,6 +30,10 @@
 
 #ifndef AML_SSTORE_WRITE_BACK
 #define AML_SSTORE_WRITE_BACK	1
+#endif
+
+#ifndef AML_SSTORE_SKIP_UNCHANGED
+#define AML_SSTORE_SKIP_UNCHANGED	0
 #endif
 
 #ifndef AML_TRIAL
@@ -102,12 +107,20 @@ static const struct aml_sstore_ops sstore_ops = {
 /* 不写回构建（只给 RAM 试验）的标记：build-bl31.sh 据此核对产物 */
 static const char aml_sstore_hold_marker[] = "homeiot-sstore-hold";
 #endif
+#if AML_SSTORE_SKIP_UNCHANGED
+/* 不写没变的值的构建的标记：build-bl31.sh 据此核对产物 */
+static const char aml_sstore_skip_marker[] = "homeiot-sstore-skip-unchanged";
+#endif
 
 void aml_sstore_setup(void)
 {
 	aml_sstore_init(&sstore, (uint8_t *)AML_SSTORE_IN_BASE, (uint8_t *)AML_SSTORE_OUT_BASE,
 			(uint8_t *)AML_SSTORE_BLOCK_BASE, (uint8_t *)AML_SSTORE_MSG_BASE,
 			&sstore_ops, AML_SSTORE_WRITE_BACK != 0);
+	sstore.skip_unchanged = (AML_SSTORE_SKIP_UNCHANGED != 0);
+#if AML_SSTORE_SKIP_UNCHANGED
+	NOTICE("sstore: unchanged writes are not sealed (%s)\n", aml_sstore_skip_marker);
+#endif
 #if !AML_SSTORE_WRITE_BACK
 	NOTICE("sstore: write-back off, writes stay in secure memory (%s)\n", aml_sstore_hold_marker);
 #endif
@@ -137,6 +150,7 @@ static const char *seal_result_name(enum aml_sstore_seal_result r)
 	case AML_SSTORE_SEAL_SELFCHECK:		return "self-check of the new block failed";
 	case AML_SSTORE_SEAL_KEY_FAIL:		return "key derivation failed (eFuse read)";
 	case AML_SSTORE_SEAL_HELD:		return "held in secure memory (write-back off)";
+	case AML_SSTORE_SEAL_SKIPPED:		return "unchanged, not sealed";
 	default:				return "?";
 	}
 }
@@ -166,6 +180,9 @@ static void log_change(bool is_write, uint32_t ret)
 		NOTICE("sstore: %s '%s' (%u bytes) -> %u, %s, block sha256 %02x%02x%02x%02x%02x%02x%02x%02x\n",
 		       what, printable ? name : "<binary>", sstore.last_datalen, ret,
 		       seal_result_name(sstore.last_seal), h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]);
+	} else if (sstore.last_seal == AML_SSTORE_SEAL_SKIPPED) {
+		NOTICE("sstore: %s '%s' (%u bytes) -> %u, %s\n", what, printable ? name : "<binary>",
+		       sstore.last_datalen, ret, seal_result_name(sstore.last_seal));
 	} else if (sstore.last_seal != AML_SSTORE_SEAL_NONE) {
 		ERROR("sstore: %s '%s' -> %u, %s\n", what, printable ? name : "<binary>", ret,
 		      seal_result_name(sstore.last_seal));

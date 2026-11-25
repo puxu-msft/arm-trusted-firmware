@@ -382,6 +382,7 @@ enum aml_sstore_load_result aml_sstore_load(struct aml_sstore *s, uint32_t size)
 
 	memset(s->msg, 0, AML_SSTORE_MSG_CLEAR);
 	table_reset(s);
+	s->unsealed = false;
 	s->enc_loaded = -1;
 	s->version = -1;
 
@@ -652,6 +653,7 @@ static bool seal(struct aml_sstore *s)
 	st32(s->msg + AML_SSTORE_MSG_COUNT, ns_ld32(s->msg + AML_SSTORE_MSG_COUNT) + 1U);
 	s->version = 1;
 	s->enc_loaded = type;
+	s->unsealed = false;
 	r = AML_SSTORE_SEALED;
 out:
 	aml_sstore_wipe(&aes, sizeof(aes));
@@ -743,6 +745,7 @@ uint32_t aml_sstore_write(struct aml_sstore *s)
 	if (i < 0) {
 		if (s->count >= AML_SSTORE_KEYS)
 			return AML_SSTORE_ERR_FULL;
+		s->unsealed = true;
 		k = &s->keys[s->count++];
 		memset(k, 0, sizeof(*k));
 		memcpy(k->name, name, namelen);
@@ -758,6 +761,12 @@ uint32_t aml_sstore_write(struct aml_sstore *s)
 		k = &s->keys[i];
 		if (k->attr != attr)
 			return AML_SSTORE_ERR_PARAM;
+		if (s->skip_unchanged && !s->unsealed && (k->data != NULL) && (k->datalen == datalen) &&
+		    (memcmp(k->data, src, datalen) == 0)) {
+			s->last_seal = AML_SSTORE_SEAL_SKIPPED;
+			return AML_SSTORE_UNCHANGED;
+		}
+		s->unsealed = true;
 		if (k->datalen < datalen) {
 			/* 厂商在分配失败时把数据指针也置成 NULL（之后写块会丢掉这个 key），这里保留旧值 */
 			uint8_t *p = heap_alloc(s, datalen);
@@ -867,6 +876,7 @@ uint32_t aml_sstore_remove(struct aml_sstore *s)
 	i = lookup(s, name, namelen);
 	if (i < 0)
 		return AML_SSTORE_ERR_PARAM;
+	s->unsealed = true;
 	s->keys[i].state = (s->keys[i].state & ~1U) | 2U;
 	return seal(s) ? AML_SSTORE_OK : AML_SSTORE_ERR_NOKEY;
 }

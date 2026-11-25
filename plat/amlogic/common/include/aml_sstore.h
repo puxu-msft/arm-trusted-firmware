@@ -44,6 +44,8 @@
 #define AML_SSTORE_ERR_NOKEY		1U
 #define AML_SSTORE_ERR_PARAM		2U
 #define AML_SSTORE_ERR_FULL		3U
+/* 本分支：skip_unchanged 打开时 WRITE 的值与属性和表里的相同，什么都不改、回这个值（厂商没有）。厂商 4.9 内核的 amlkey_write 回非 0 就不落盘，经 sysfs 写的用户态照样拿到写入的字节数 */
+#define AML_SSTORE_UNCHANGED		4U
 
 struct aml_sstore_key {
 	uint8_t name[80];
@@ -87,6 +89,7 @@ enum aml_sstore_seal_result {
 	AML_SSTORE_SEAL_SELFCHECK,	/* 自检：按装载的解析规则读回明文，与对象表不符 */
 	AML_SSTORE_SEAL_KEY_FAIL,
 	AML_SSTORE_SEAL_HELD,		/* 不写回（write_back = false）：已在安全侧序列化并自检，块缓冲不动 */
+	AML_SSTORE_SEAL_SKIPPED,	/* skip_unchanged：值与属性都没变，没有写块 */
 };
 
 struct aml_sstore {
@@ -98,6 +101,10 @@ struct aml_sstore {
 	const struct aml_sstore_ops *ops;
 	/* false：WRITE/REMOVE 只改对象表与安全侧的序列化结果，不碰块缓冲、回 1（内核因此不落盘），供 RAM 试验 */
 	bool write_back;
+	/* true：WRITE 的名字已在表里、属性相同、长度与字节都相同，且表在上次装载或写块之后没有改过（unsealed 为假），表、块缓冲、消息区与 VERSION 都不动，回 AML_SSTORE_UNCHANGED（init 每次开机把三个挂载计数写回原值，厂商内核每写一次都把整块写进 eMMC 两份） */
+	bool skip_unchanged;
+	/* 表改过、新块还没交给块缓冲（写块失败、不写回模式）：这时同值的 WRITE 不跳过，照常写块，让值有机会落盘 */
+	bool unsealed;
 
 	struct aml_sstore_key keys[AML_SSTORE_KEYS];
 	uint32_t count;		/* 厂商的表项计数：新 key 放在 keys[count]；装载失败时不清 */

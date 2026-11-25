@@ -89,10 +89,12 @@ endif
 
 # 安全存储（unifykey）：现役 Android 9 的内核在运行期直接发存储类 SMC，表由引导程序装好（plat/amlogic/common/aml_sstore*.c，M12 docs/19 §6）
 # AML_SSTORE_WRITE_BACK=0 只给 RAM 试验：WRITE/REMOVE 不把新块交回块缓冲、回 1，内核不落盘
+# AML_SSTORE_SKIP_UNCHANGED=1（缺省）：值与属性都没变的 WRITE 什么都不改、回 4，厂商内核因此不把整块写进 eMMC（init 每次开机把三个挂载计数写回原值，M12 S5 上机验过）；0 照厂商每次都写块
 AML_SSTORE			:= 1
 AML_SSTORE_WRITE_BACK		:= 1
-$(eval $(call assert_booleans, AML_SSTORE AML_SSTORE_WRITE_BACK))
-$(eval $(call add_defines, AML_SSTORE AML_SSTORE_WRITE_BACK))
+AML_SSTORE_SKIP_UNCHANGED	:= 1
+$(eval $(call assert_booleans, AML_SSTORE AML_SSTORE_WRITE_BACK AML_SSTORE_SKIP_UNCHANGED))
+$(eval $(call add_defines, AML_SSTORE AML_SSTORE_WRITE_BACK AML_SSTORE_SKIP_UNCHANGED))
 ifeq (${AML_SSTORE},1)
 BL31_SOURCES		+=	${AML_PLAT_COMMON}/aml_sstore.c			\
 				${AML_PLAT_COMMON}/aml_sstore_crypto.c		\
