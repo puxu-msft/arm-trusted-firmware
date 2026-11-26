@@ -248,6 +248,8 @@
 #define AML_EFUSE_DUMP_SIZE			(AML_EFUSE_SIZE + U(0x50))
 /* eFuse 控制器的许可寄存器 EFUSE_LIC0–3：LIC0 bit0 安全启动（厂商 BL31 0x5119f9c），bit6 防回滚（厂商 BL2 的 ARB 检查 0xfffab600 起、BL30 0x10002e18 烧防回滚版本号）与 BL2 自动写 RPMB 密钥（0xfffa19a8）；LIC1 bit0/1、LIC2 bit15 音频许可（厂商 BL31 0x511d0ec） */
 #define AML_EFUSE_LIC_BASE			UL(0xFF630030)
+/* 音频许可查询（AML_AUDIO_LICENCE，厂商 0x511d0ec）：请求在非安全输入共享区，按 EFUSE_LIC1 bit0/1、EFUSE_LIC2 bit15 填结果，协议见 plat/amlogic/common/include/aml_audio_licence.h */
+#define AML_SM_QUERY_AUDIO_LICENCE		U(0x82000050)
 #define AML_SM_TRIAL_EFUSE_DUMP			U(0x820000F1)	/* 本分支私有，只在试验构建里 */
 
 #define AML_AO_GPIO_TEST_N			UL(0xFF800140)

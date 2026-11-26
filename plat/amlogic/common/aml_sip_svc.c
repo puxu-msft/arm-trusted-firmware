@@ -27,6 +27,10 @@
 #define AML_HDCP	0
 #endif
 
+#ifndef AML_AUDIO_LICENCE
+#define AML_AUDIO_LICENCE	0
+#endif
+
 #ifndef AML_TRIAL_EFUSE_DUMP
 #define AML_TRIAL_EFUSE_DUMP	0
 #endif
@@ -142,6 +146,12 @@ static uintptr_t aml_sip_handler(uint32_t smc_fid,
 
 	case AML_SM_GET_CHIP_ID:
 		SMC_RET1(handle, aml_sip_get_chip_id(x1));
+
+#if AML_AUDIO_LICENCE
+	case AML_SM_QUERY_AUDIO_LICENCE:
+		/* 厂商不看 x1、x2 与调用者是哪个世界（分派 0x5118194 把 x1、x2 交给处理函数，处理函数不用） */
+		SMC_RET1(handle, aml_audio_licence_sip());
+#endif
 
 #if AML_TRIAL_EFUSE_DUMP
 	case AML_SM_TRIAL_EFUSE_DUMP:

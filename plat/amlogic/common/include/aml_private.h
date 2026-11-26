@@ -62,6 +62,9 @@ void aml_hdmitx_sec_write(uint32_t reg, uint32_t val);
 void aml_hdcp_setup(void);
 bool aml_hdcp_sip(uint32_t fid, u_register_t x1, u_register_t *ret);
 
+/* 音频许可查询（AML_AUDIO_LICENCE，aml_audio_licence_svc.c）：处理非安全输入共享区里的请求，回交给调用者的 x0 */
+uint64_t aml_audio_licence_sip(void);
+
 /* 安全存储（AML_SSTORE） */
 void aml_sstore_setup(void);
 bool aml_sstore_sip(uint32_t fid, u_register_t x1, u_register_t flags, u_register_t *ret);

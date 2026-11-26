@@ -113,6 +113,22 @@ BL31_SOURCES		+=	${AML_PLAT_COMMON}/aml_hdcp.c			\
 				${AML_PLAT_COMMON}/aml_hdcp_svc.c
 endif
 
+# 音频许可查询（SiP 0x82000050，plat/amlogic/common/aml_audio_licence*.c 与 aml_rsa.c）：现役 Android 9 的 Dolby 与 DRA 软解库经内核 audio_data 查许可，查不到就当没有许可（DRA 静音，M12 docs/19 §9）
+# 要用厂商 BL31 里内置的四把 RSA 私钥：钥材料不进源码树，由构建入口从钥匙真源生成 aml_audio_licence_keys.h（定义 AML_AUDIO_LICENCE_KEYS_INIT），AML_AUDIO_LICENCE_KEYS_DIR 是它所在的目录（相对 TF-A 源码树或绝对路径）
+AML_AUDIO_LICENCE		:= 1
+AML_AUDIO_LICENCE_KEYS_DIR	:=
+$(eval $(call assert_boolean,AML_AUDIO_LICENCE))
+$(eval $(call add_define,AML_AUDIO_LICENCE))
+ifeq (${AML_AUDIO_LICENCE},1)
+ifeq ($(wildcard ${AML_AUDIO_LICENCE_KEYS_DIR}/aml_audio_licence_keys.h),)
+  $(error AML_AUDIO_LICENCE=1 needs AML_AUDIO_LICENCE_KEYS_DIR=<directory holding aml_audio_licence_keys.h> on ${PLAT}: the RSA private keys of the audio licence query are kept out of the source tree, the build entry generates that header from the key file (M12 tools/tf-a/build-bl31.sh); or build with AML_AUDIO_LICENCE=0)
+endif
+PLAT_INCLUDES		+=	-I${AML_AUDIO_LICENCE_KEYS_DIR}
+BL31_SOURCES		+=	${AML_PLAT_COMMON}/aml_audio_licence.c		\
+				${AML_PLAT_COMMON}/aml_audio_licence_svc.c	\
+				${AML_PLAT_COMMON}/aml_rsa.c
+endif
+
 # 重启原因 9（rpmbp）按 0 写：厂商 BL2 见到原因 9 且 RPMB 没有密钥时会把派生的密钥永久写进 eMMC 的 RPMB（plat/amlogic/common/aml_reboot_reason.c，M12 docs/16 §2.5；用户 2026-11-26 定，定型构建也带）
 AML_REBOOT_REASON_NO_RPMBP	:= 1
 $(eval $(call assert_boolean,AML_REBOOT_REASON_NO_RPMBP))
