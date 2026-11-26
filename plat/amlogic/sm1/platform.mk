@@ -113,6 +113,14 @@ BL31_SOURCES		+=	${AML_PLAT_COMMON}/aml_hdcp.c			\
 				${AML_PLAT_COMMON}/aml_hdcp_svc.c
 endif
 
+# 重启原因 9（rpmbp）按 0 写：厂商 BL2 见到原因 9 且 RPMB 没有密钥时会把派生的密钥永久写进 eMMC 的 RPMB（plat/amlogic/common/aml_reboot_reason.c，M12 docs/16 §2.5；用户 2026-11-26 定，定型构建也带）
+AML_REBOOT_REASON_NO_RPMBP	:= 1
+$(eval $(call assert_boolean,AML_REBOOT_REASON_NO_RPMBP))
+$(eval $(call add_define,AML_REBOOT_REASON_NO_RPMBP))
+ifeq (${AML_REBOOT_REASON_NO_RPMBP},1)
+BL31_SOURCES		+=	${AML_PLAT_COMMON}/aml_reboot_reason.c
+endif
+
 # 试验辅助（只给 RAM 试验件）：冷启动武装 EE 看门狗、日志另写一份到内存（plat/amlogic/g12a/g12a_bl31_setup.c）
 AML_TRIAL			:= 0
 AML_TRIAL_WDT_MS		:= 30000

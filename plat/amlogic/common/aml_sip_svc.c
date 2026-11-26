@@ -204,9 +204,16 @@ static uintptr_t aml_sip_handler(uint32_t smc_fid,
 	}
 
 	case AML_SM_SET_REBOOT_REASON:
-		/* 厂商把 x1 整个或进 REG3（0x5119ea4）；这里只取 [3:0]，越界的高位不写进别的字段 */
-		aml_ao_reg3_set(AML_REBOOT_REASON_MASK, (uint32_t)x1);
+	{
+		/* 厂商先清 REG3[3:0] 再把 x1 整个或进去（0x5119ea0–0x5119ea4），x1 的高位会或进别的字段；这里只取 [3:0] */
+		uint32_t reason = (uint32_t)x1 & AML_REBOOT_REASON_MASK;
+
+#if defined(AML_REBOOT_REASON_NO_RPMBP) && AML_REBOOT_REASON_NO_RPMBP
+		reason = aml_reboot_reason_filter(reason, "SiP 0x82000049");
+#endif
+		aml_ao_reg3_set(AML_REBOOT_REASON_MASK, reason);
 		SMC_RET1(handle, 0);
+	}
 
 	case AML_SM_DATA_PROCESS:
 		if ((x1 == AML_DATA_PROCESS_BOOT_CHECK) ||

@@ -141,10 +141,14 @@ static void __dead2 g12a_system_reset(void)
 	 */
 	u_register_t x1 = read_ctx_reg(get_gpregs_ctx(cm_get_context(NON_SECURE)),
 				       CTX_GPREG_X1);
+	uint32_t reason = (uint32_t)x1 & AML_REBOOT_REASON_MASK;
 	int ret;
 
+#if defined(AML_REBOOT_REASON_NO_RPMBP) && AML_REBOOT_REASON_NO_RPMBP
+	reason = aml_reboot_reason_filter(reason, "SYSTEM_RESET");
+#endif
 	mmio_clrbits_32(AML_AO_SEC_GP_CFG7, AML_AO_SEC_GP_CFG7_CPU_MASK);
-	g12a_pm_write_reboot_reason((uint32_t)x1 & AML_REBOOT_REASON_MASK);
+	g12a_pm_write_reboot_reason(reason);
 	g12a_pm_mailbox_arm(mpidr);
 
 	ret = aml_scpi_sys_power_state(SCPI_SYSTEM_REBOOT);

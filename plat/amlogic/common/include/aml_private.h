@@ -43,6 +43,9 @@ uint64_t aml_efuse_user_max(void);
 /* 试验构建的整片 eFuse 只读导出（AML_TRIAL_EFUSE_DUMP，aml_efuse_dump.c）：往 dst 写 AML_EFUSE_DUMP_SIZE 字节（格式见该文件头），回读出的字节数；masks 是读出、字节数不足、两遍不同的块 */
 uint32_t aml_efuse_dump(uint8_t *dst, uint32_t masks[3]);
 
+/* 重启原因的过滤（AML_REBOOT_REASON_NO_RPMBP，aml_reboot_reason.c）：原因 9 换成 0，via 是来路（日志用） */
+uint32_t aml_reboot_reason_filter(uint32_t reason, const char *via);
+
 /* 试验构建（AML_TRIAL）：只写进内存日志的字符串 */
 void aml_trial_memlog_puts(const char *s);
 

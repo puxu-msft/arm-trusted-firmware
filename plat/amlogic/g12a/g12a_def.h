@@ -162,6 +162,8 @@
  * AO_RTI_STATUS_REG3 的字段（厂商 g12a BL31 与 BL2 的用法）：[3:0] 重启原因（PSCI 复位的 x1 低 4 位；下次启动 BL30 把它搬到 AO_RTI_SCP_STAT[15:12] 再把 [3:0] 置 0xD），[15:12] USB 启动标志（8 = 内核 panic 后转 USB）。
  */
 #define AML_REBOOT_REASON_MASK			U(0xF)
+#define AML_REBOOT_REASON_COLD			U(0x0)
+#define AML_REBOOT_REASON_RPMBP			U(0x9)
 #define AML_REBOOT_REASON_KERNEL_PANIC		U(0xC)
 #define AML_REBOOT_REASON_POWEROFF		U(0x8)
 #define AML_USB_BOOT_FLAG_SHIFT			U(12)
